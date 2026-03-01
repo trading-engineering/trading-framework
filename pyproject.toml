@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "trading-framework"
 version = "0.1.0"
-description = "Deterministic, event-driven core trading framework, with explicit risk management, order state machines, queue semantics, and research orchestration."
+description = "Deterministic, event-driven core framework, with explicit risk management, order state machines, queue semantics, and research orchestration."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "tradingeng@protonmail.com" }]
