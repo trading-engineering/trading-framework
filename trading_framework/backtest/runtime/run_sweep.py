@@ -4,7 +4,7 @@ import argparse
 import importlib.metadata
 import json
 import os
-import framework
+import platform
 import shutil
 import sys
 import tomllib
@@ -281,7 +281,7 @@ class SweepMetadataWriter:
             },
             "environment": {
                 "python": sys.version.split()[0],
-                "framework": framework.framework(),
+                "framework": platform.platform(),
                 "container_image": os.environ.get("IMAGE_TAG"),
             },
             "artifacts": {
