@@ -11,12 +11,11 @@ from importlib.metadata import PackageNotFoundError, version
 # ----------------------------------------------------------------------
 # Backtest Engine API
 # ----------------------------------------------------------------------
-from trading_framework.backtest.engine.engine_base import BacktestResult
-from trading_framework.backtest.engine.hft_engine import (
-    HftBacktestConfig,
-    HftBacktestEngine,
-    HftEngineConfig,
-)
+#
+# Backtest engine/runtime code is runtime-owned and has moved to the
+# `trading-runtime` repository (import from `trading_runtime.backtest.*`).
+#
+# This semantic-core package must remain importable without the runtime layer.
 from trading_framework.core.domain.slots import (
     SlotKey,
     stable_slot_order_id,
@@ -54,12 +53,6 @@ from trading_framework.strategies.strategy_config import StrategyConfig
 # ----------------------------------------------------------------------
 
 __all__ = [
-    # Engine
-    "HftBacktestEngine",
-    "HftBacktestConfig",
-    "HftEngineConfig",
-    "BacktestResult",
-
     # Config
     "RiskConfig",
     "StrategyConfig",
