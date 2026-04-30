@@ -341,96 +341,23 @@ class RiskEngine:
                 continue
 
             it = norm.normalized
-            # 0) Existence / uniqueness guards (C1)
-            has_working = state.has_working_order(it.instrument, it.client_order_id)
-            has_queued = state.has_queued_intent(it.instrument, it.client_order_id)
-
-            # 0.5) Replace delta gating (after venue normalization)
-            # Drop replace intents that do not materially change price or quantity.
-            if it.intent_type == "replace":
-                # replace_px = it.intended_price.value
-                # replace_qty = it.intended_qty.value
-
-                if has_working:
-                    working = state.get_working_order_snapshot(it.instrument, it.client_order_id)
-                    if working is not None:
-                        if (
-                            self._execution_control.is_replace_noop_against_working(
-                                replace_intent=it,
-                                working_intended_price=working.intended_price,
-                                working_intended_qty=working.intended_qty,
-                                float_equal=self._float_equal,
-                            )
-                        ):
-                            handled_in_queue.append(it)
-                            continue
-
-                if not has_working and has_queued:
-                    queued_new = state.find_queued_new_intent(it.instrument, it.client_order_id)
-                    if queued_new is not None:
-                        if self._execution_control.is_replace_noop_against_queued_new(
-                            replace_intent=it,
-                            queued_new=queued_new,
-                            float_equal=self._float_equal,
-                        ):
-                            handled_in_queue.append(it)
-                            continue
-
-            if it.intent_type == "new":
-                if has_working or has_queued:
-                    rejected.append(RejectedIntent(it, RejectReason.DUPLICATE_ID))
-                    _count_reject(RejectReason.DUPLICATE_ID)
-                    continue
-
-            if it.intent_type == "cancel":
-                if not has_working:
-                    if has_queued:
-                        # Cancel only queued state: remove queued intents and do not send a cancel.
-                        self._execution_control.handle_cancel_against_queued_only_state(
-                            it,
-                            state=state,
-                            replaced_in_queue=replaced_in_queue,
-                            handled_in_queue=handled_in_queue,
-                        )
-                        continue
-
-                    rejected.append(RejectedIntent(it, RejectReason.ORDER_NOT_FOUND))
-                    _count_reject(RejectReason.ORDER_NOT_FOUND)
-                    continue
-
-            if it.intent_type == "replace":
-                if not has_working:
-                    # Replace acting on queued NEW: transform to NEW (update planned order).
-                    queued_new = state.find_queued_new_intent(it.instrument, it.client_order_id)
-                    if queued_new is None:
-                        rejected.append(RejectedIntent(it, RejectReason.ORDER_NOT_FOUND))
-                        _count_reject(RejectReason.ORDER_NOT_FOUND)
-                        continue
-
-                    self._execution_control.handle_replace_against_queued_new(
-                        it,
-                        state=state,
-                        queued_new=queued_new,
-                        replaced_in_queue=replaced_in_queue,
-                        dropped_in_queue=dropped_in_queue,
-                        queued=queued,
-                        handled_in_queue=handled_in_queue,
-                    )
-                    continue
-
-            # 0.6) Inflight gating: if an update is already in flight for this
-            # order id, do not send another new/replace immediately. Instead,
-            # enqueue the latest desired intent to be flushed once inflight clears.
-            # NOTE:
-            # Inflight gating is best-effort and snapshot-driven.
-            # This enforces *eventual consistency*, not ACK-synchronous behavior.
-            # An intent may be queued even though the previous request has already
-            # reached the venue but is not yet observable via snapshots.
-            if self._execution_control.maybe_route_new_replace_to_queue_on_inflight(
-                it,
-                state,
-                to_queue_by_instr,
-            ):
+            # 0) Pre-submission lifecycle / identity / inflight routing compatibility handling.
+            continue_to_policy, lifecycle_reject_reason = (
+                self._execution_control.route_pre_submission_lifecycle_and_inflight(
+                    it,
+                    state=state,
+                    to_queue_by_instr=to_queue_by_instr,
+                    replaced_in_queue=replaced_in_queue,
+                    dropped_in_queue=dropped_in_queue,
+                    queued=queued,
+                    handled_in_queue=handled_in_queue,
+                    float_equal=self._float_equal,
+                )
+            )
+            if not continue_to_policy:
+                if lifecycle_reject_reason is not None:
+                    rejected.append(RejectedIntent(it, lifecycle_reject_reason))
+                    _count_reject(lifecycle_reject_reason)
                 continue
 
             # 1) Outbound hygiene validation (hard reject)

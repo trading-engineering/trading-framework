@@ -13,6 +13,7 @@ import math
 from collections import defaultdict
 from typing import TYPE_CHECKING, Callable
 
+from trading_framework.core.domain.reject_reasons import RejectReason
 from trading_framework.core.domain.types import NewOrderIntent, OrderIntent
 
 if TYPE_CHECKING:
@@ -84,6 +85,93 @@ class ExecutionControl:
                 to_queue_by_instr[it.instrument].append(it)
                 return True
         return False
+
+    def route_pre_submission_lifecycle_and_inflight(
+        self,
+        it: OrderIntent,
+        *,
+        state: StrategyState,
+        to_queue_by_instr: defaultdict[str, list[OrderIntent]],
+        replaced_in_queue: list[tuple[OrderIntent, OrderIntent]],
+        dropped_in_queue: list[OrderIntent],
+        queued: list[OrderIntent],
+        handled_in_queue: list[OrderIntent],
+        float_equal: Callable[[float, float], bool],
+    ) -> tuple[bool, str | None]:
+        """Apply pre-submission lifecycle/identity/noop/inflight handling.
+
+        Returns:
+            (continue_to_policy_checks, reject_reason)
+        """
+        has_working = state.has_working_order(it.instrument, it.client_order_id)
+        has_queued = state.has_queued_intent(it.instrument, it.client_order_id)
+
+        if it.intent_type == "replace":
+            if has_working:
+                working = state.get_working_order_snapshot(it.instrument, it.client_order_id)
+                if working is not None:
+                    if self.is_replace_noop_against_working(
+                        replace_intent=it,
+                        working_intended_price=working.intended_price,
+                        working_intended_qty=working.intended_qty,
+                        float_equal=float_equal,
+                    ):
+                        handled_in_queue.append(it)
+                        return False, None
+
+            if not has_working and has_queued:
+                queued_new = state.find_queued_new_intent(it.instrument, it.client_order_id)
+                if queued_new is not None:
+                    if self.is_replace_noop_against_queued_new(
+                        replace_intent=it,
+                        queued_new=queued_new,
+                        float_equal=float_equal,
+                    ):
+                        handled_in_queue.append(it)
+                        return False, None
+
+        if it.intent_type == "new":
+            if has_working or has_queued:
+                return False, RejectReason.DUPLICATE_ID
+
+        if it.intent_type == "cancel":
+            if not has_working:
+                if has_queued:
+                    self.handle_cancel_against_queued_only_state(
+                        it,
+                        state=state,
+                        replaced_in_queue=replaced_in_queue,
+                        handled_in_queue=handled_in_queue,
+                    )
+                    return False, None
+
+                return False, RejectReason.ORDER_NOT_FOUND
+
+        if it.intent_type == "replace":
+            if not has_working:
+                queued_new = state.find_queued_new_intent(it.instrument, it.client_order_id)
+                if queued_new is None:
+                    return False, RejectReason.ORDER_NOT_FOUND
+
+                self.handle_replace_against_queued_new(
+                    it,
+                    state=state,
+                    queued_new=queued_new,
+                    replaced_in_queue=replaced_in_queue,
+                    dropped_in_queue=dropped_in_queue,
+                    queued=queued,
+                    handled_in_queue=handled_in_queue,
+                )
+                return False, None
+
+        if self.maybe_route_new_replace_to_queue_on_inflight(
+            it,
+            state,
+            to_queue_by_instr,
+        ):
+            return False, None
+
+        return True, None
 
     def handle_cancel_against_queued_only_state(
         self,
