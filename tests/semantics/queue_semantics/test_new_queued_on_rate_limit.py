@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
+    CancelOrderIntent,
     NewOrderIntent,
     NotionalLimits,
     OrderRateLimits,
     OrderStateEvent,
     Price,
     Quantity,
-    CancelOrderIntent,
 )
 from trading_framework.core.events.sinks.null_event_bus import NullEventBus
 from trading_framework.core.risk.risk_config import RiskConfig

@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 from trading_framework.core.domain.reject_reasons import RejectReason
 from trading_framework.core.domain.types import OrderIntent, RiskConstraints
-from trading_framework.core.execution_control import ExecutionControl
 from trading_framework.core.events.events import RiskDecisionEvent
+from trading_framework.core.execution_control import ExecutionControl
 from trading_framework.core.ports.venue_policy import VenuePolicy
 from trading_framework.core.risk.risk_policy import RiskPolicy
 
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from risk.risk_config import RiskConfig
 
     from trading_framework.core.domain.state import StrategyState
-    from trading_framework.core.domain.types import QuoteLimits
     from trading_framework.core.events.event_bus import EventBus
 
 
@@ -349,8 +348,8 @@ class RiskEngine:
             # 0.5) Replace delta gating (after venue normalization)
             # Drop replace intents that do not materially change price or quantity.
             if it.intent_type == "replace":
-                replace_px = it.intended_price.value
-                replace_qty = it.intended_qty.value
+                # replace_px = it.intended_price.value
+                # replace_qty = it.intended_qty.value
 
                 if has_working:
                     working = state.get_working_order_snapshot(it.instrument, it.client_order_id)
