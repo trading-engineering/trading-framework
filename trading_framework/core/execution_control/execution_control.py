@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from trading_framework.core.domain.reject_reasons import RejectReason
@@ -18,6 +19,13 @@ from trading_framework.core.domain.types import NewOrderIntent, OrderIntent
 
 if TYPE_CHECKING:
     from trading_framework.core.domain.state import StrategyState
+
+
+@dataclass(slots=True)
+class _RateRoutingResult:
+    accept_now: bool
+    stage_to_queue: bool
+    wake_ts_ns_local: int | None
 
 
 class ExecutionControl:
@@ -72,6 +80,49 @@ class ExecutionControl:
         state["tokens"] = tokens
         state["last_ts"] = now_ts
         return False, wake_ts
+
+    def route_after_policy_rate_limit(
+        self,
+        it: OrderIntent,
+        *,
+        now_ts_ns_local: int,
+        max_orders_per_sec: float | None,
+        max_cancels_per_sec: float | None,
+    ) -> _RateRoutingResult:
+        """Route policy-allowed intent by rate-limits (accept now vs stage)."""
+        if it.intent_type == "cancel":
+            if max_cancels_per_sec is not None:
+                allowed, wake_ts = self.consume_rate(
+                    "cancel", now_ts_ns_local, max_cancels_per_sec
+                )
+                if not allowed:
+                    return _RateRoutingResult(
+                        accept_now=False,
+                        stage_to_queue=True,
+                        wake_ts_ns_local=wake_ts,
+                    )
+            return _RateRoutingResult(
+                accept_now=True,
+                stage_to_queue=False,
+                wake_ts_ns_local=None,
+            )
+
+        if max_orders_per_sec is not None:
+            allowed, wake_ts = self.consume_rate(
+                "order", now_ts_ns_local, max_orders_per_sec
+            )
+            if not allowed:
+                return _RateRoutingResult(
+                    accept_now=False,
+                    stage_to_queue=True,
+                    wake_ts_ns_local=wake_ts,
+                )
+
+        return _RateRoutingResult(
+            accept_now=True,
+            stage_to_queue=False,
+            wake_ts_ns_local=None,
+        )
 
     def maybe_route_new_replace_to_queue_on_inflight(
         self,

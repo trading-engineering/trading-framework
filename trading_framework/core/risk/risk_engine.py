@@ -384,27 +384,18 @@ class RiskEngine:
                 continue
 
             # 3) Rate limiting -> queue (soft, not reject)
-            if it.intent_type == "cancel":
-                if max_cancels_per_sec is not None:
-                    allowed, wake_ts = self._execution_control.consume_rate(
-                        "cancel", now_ts_ns_local, max_cancels_per_sec
-                    )
-                    if not allowed:
-                        to_queue_by_instr[it.instrument].append(it)
-                        next_send_ts = wake_ts if next_send_ts is None else min(next_send_ts, wake_ts)
-                        continue
-                accepted_now.append(it)
-                continue
-
-            # new / replace
-            if max_orders_per_sec is not None:
-                allowed, wake_ts = self._execution_control.consume_rate(
-                    "order", now_ts_ns_local, max_orders_per_sec
-                )
-                if not allowed:
-                    to_queue_by_instr[it.instrument].append(it)
+            rate_result = self._execution_control.route_after_policy_rate_limit(
+                it,
+                now_ts_ns_local=now_ts_ns_local,
+                max_orders_per_sec=max_orders_per_sec,
+                max_cancels_per_sec=max_cancels_per_sec,
+            )
+            if rate_result.stage_to_queue:
+                to_queue_by_instr[it.instrument].append(it)
+                wake_ts = rate_result.wake_ts_ns_local
+                if wake_ts is not None:
                     next_send_ts = wake_ts if next_send_ts is None else min(next_send_ts, wake_ts)
-                    continue
+                continue
 
             accepted_now.append(it)
 
