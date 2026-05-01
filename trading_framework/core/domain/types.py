@@ -342,6 +342,12 @@ class FillEvent(BaseModel):
 
 
 class OrderStateEvent(BaseModel):
+    """Compatibility execution-feedback / snapshot-materialization record.
+
+    ``OrderStateEvent`` remains non-canonical in this slice. It exists for
+    compatibility ingestion/projection flows and must not be interpreted as a
+    canonical Event Stream record.
+    """
     ts_ns_exch: int = Field(..., gt=0)
     ts_ns_local: int = Field(..., gt=0)
 

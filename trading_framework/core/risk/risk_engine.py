@@ -35,6 +35,9 @@ class RejectedIntent:
 class GateDecision:
     """Result of the hard risk/gate layer.
 
+    Compatibility decision contract consumed by strategy/runtime orchestration.
+    This is not an Event and not a canonical Event Stream record.
+
     - accepted_now: intents that may be sent immediately
     - queued: intents that were enqueued into StrategyState.queue (data-only)
     - rejected: hard rejects with reasons

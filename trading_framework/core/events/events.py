@@ -16,6 +16,10 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class OrderStateTransitionEvent:
+    """Observability payload for invalid/edge order-state transitions.
+
+    Telemetry only; not a canonical Event Stream record.
+    """
     ts_ns_local: int
     instrument: str
     client_order_id: str
@@ -25,6 +29,11 @@ class OrderStateTransitionEvent:
 
 @dataclass(slots=True)
 class DerivedFillEvent:
+    """Inferred compatibility projection artifact.
+
+    This record is derived from snapshot progression and is not a canonical
+    ``FillEvent`` or canonical Event Stream record.
+    """
     ts_ns_local: int
     instrument: str
     client_order_id: str
@@ -39,6 +48,10 @@ class DerivedFillEvent:
 
 @dataclass(slots=True)
 class DerivedPnLEvent:
+    """Observability payload for derived realized-PnL changes.
+
+    Telemetry only; not a canonical Event Stream record.
+    """
     ts_ns_local: int
     instrument: str
 
@@ -48,6 +61,10 @@ class DerivedPnLEvent:
 
 @dataclass(slots=True)
 class ExposureDerivedEvent:
+    """Observability payload for derived exposure changes.
+
+    Telemetry only; not a canonical Event Stream record.
+    """
     ts_ns_local: int
     instrument: str
 
@@ -57,6 +74,10 @@ class ExposureDerivedEvent:
 
 @dataclass(slots=True)
 class RiskDecisionEvent:
+    """Observability payload summarizing risk/gate outcomes.
+
+    Telemetry only; not a canonical Event Stream record.
+    """
     ts_ns_local: int
 
     accepted: int

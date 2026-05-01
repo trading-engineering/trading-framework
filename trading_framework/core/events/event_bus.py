@@ -11,7 +11,10 @@ from trading_framework.core.events.event_sink import EventSink
 
 
 class EventBus:
-    """Dispatches events to registered sinks."""
+    """Dispatches records to registered sinks via synchronous fanout.
+
+    This is a sink/telemetry transport helper and not a canonical Event Stream.
+    """
 
     def __init__(self, sinks: Iterable[EventSink] | None = None) -> None:
         self._sinks: list[EventSink] = list(sinks) if sinks is not None else []

@@ -11,6 +11,8 @@ from trading_framework.core.domain.event_model import (
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
 )
+from trading_framework.core.domain.processing import process_canonical_event
+from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import FillEvent, MarketEvent, OrderStateEvent
 from trading_framework.core.events.event_bus import EventBus
 from trading_framework.core.events.events import (
@@ -20,7 +22,9 @@ from trading_framework.core.events.events import (
     OrderStateTransitionEvent,
     RiskDecisionEvent,
 )
+from trading_framework.core.events.sinks.null_event_bus import NullEventBus
 from trading_framework.core.execution_control.types import ControlSchedulingObligation
+from trading_framework.core.risk.risk_engine import GateDecision
 
 
 def test_canonical_event_category_names_are_stable() -> None:
@@ -55,6 +59,13 @@ def test_event_bus_is_not_canonical_stream_record() -> None:
     assert canonical_category_for_type(EventBus) is None
 
 
+def test_gate_decision_is_not_canonical_stream_record() -> None:
+    """GateDecision remains a compatibility decision contract, not an event."""
+
+    assert is_canonical_stream_candidate_type(GateDecision) is False
+    assert canonical_category_for_type(GateDecision) is None
+
+
 def test_control_scheduling_obligation_is_not_an_event() -> None:
     """ControlSchedulingObligation is explicitly non-canonical."""
 
@@ -82,4 +93,34 @@ def test_telemetry_records_are_not_canonical_stream_candidates() -> None:
     assert DerivedFillEvent in COMPATIBILITY_PROJECTION_TYPES
     assert is_canonical_stream_candidate_type(DerivedFillEvent) is False
     assert canonical_category_for_type(DerivedFillEvent) is None
+
+
+def test_process_canonical_event_rejects_order_state_event_guard() -> None:
+    """Canonical processing boundary rejects compatibility OrderStateEvent records."""
+
+    state = StrategyState(event_bus=NullEventBus())
+    compatibility_record = OrderStateEvent(
+        ts_ns_local=1,
+        ts_ns_exch=1,
+        instrument="BTC-USDC-PERP",
+        client_order_id="compat-1",
+        order_type="limit",
+        state_type="accepted",
+        side="buy",
+        intended_price={"currency": "USDC", "value": 100.0},
+        filled_price=None,
+        intended_qty={"unit": "contracts", "value": 1.0},
+        cum_filled_qty=None,
+        remaining_qty=None,
+        time_in_force="GTC",
+        reason=None,
+        raw={"req": 0, "source": "snapshot"},
+    )
+
+    try:
+        process_canonical_event(state, compatibility_record)
+    except TypeError as exc:
+        assert "Unsupported non-canonical event type" in str(exc)
+    else:
+        raise AssertionError("Expected process_canonical_event to reject OrderStateEvent")
 

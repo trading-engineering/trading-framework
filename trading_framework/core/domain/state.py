@@ -52,7 +52,11 @@ _DEFAULT_QTY_UNIT: str = "contracts"
 
 @dataclass(slots=True)
 class OrderSnapshot:
-    """Best-effort internal order snapshot."""
+    """Best-effort compatibility order projection.
+
+    This snapshot-facing structure supports compatibility ingestion/projection
+    flows and is not canonical lifecycle authority.
+    """
 
     instrument: str
     client_order_id: str
@@ -199,6 +203,12 @@ class StrategyState:
         This is used for best-effort inflight handling. hftbacktest provides snapshots
         (status/req) rather than explicit ACK events, so inflight is cleared heuristically
         as soon as subsequent snapshots indicate completion.
+
+        Compatibility boundary:
+        - This mutates internal execution-control tracking only.
+        - For ``intent_type == "new"``, it seeds an internal canonical order
+          projection at ``submitted`` as sidecar projection state.
+        - It does not create a canonical Event Stream record.
         """
 
         bucket = self.last_sent_intents.get(instrument)
@@ -535,6 +545,13 @@ class StrategyState:
         return False
 
     def apply_order_state_event(self, event: OrderStateEvent) -> None:
+        """Reduce compatibility execution-feedback into snapshot-facing state.
+
+        This is the compatibility reducer path for ``OrderStateEvent`` records.
+        It is not canonical Event Stream processing. Internal canonical-order
+        projection updates performed here are sidecar projection logic used to
+        keep compatibility pathways aligned with submitted-boundary semantics.
+        """
         self._advance_canonical_order_projection(event)
 
         events_bucket = self.order_events.setdefault(event.instrument, deque())
@@ -749,6 +766,9 @@ class StrategyState:
 
         hftbacktest provides *snapshots* (not deltas). We translate each snapshot into
         an OrderStateEvent (snapshot) and feed it into apply_order_state_event().
+
+        This is an adapter/materialization path for compatibility snapshot
+        ingestion. It is intentionally separate from canonical ingestion.
         """
 
         def map_status(status: int, req: int, client_order_id: str) -> str:
