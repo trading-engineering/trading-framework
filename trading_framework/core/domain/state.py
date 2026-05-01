@@ -90,6 +90,17 @@ class InflightInfo:
 
 
 @dataclass(slots=True)
+class CanonicalOrderProjection:
+    """Internal canonical order lifecycle projection."""
+
+    instrument: str
+    client_order_id: str
+    state: str
+    submitted_ts_ns_local: int
+    updated_ts_ns_local: int
+
+
+@dataclass(slots=True)
 class MarketState:
     """Best-effort market snapshot needed for risk checks."""
 
@@ -145,6 +156,9 @@ class StrategyState:
         self.queued_intents: dict[str, deque[QueuedIntent]] = {}
 
         self.inflight: dict[str, dict[str, InflightInfo]] = {}
+        # Internal canonical lifecycle projection keyed by (instrument, client_order_id).
+        # This projection is intentionally separate from compatibility snapshots.
+        self.canonical_orders: dict[tuple[str, str], CanonicalOrderProjection] = {}
 
         # Best-effort tracking of last sent intent per (instrument, client_order_id).
         # Mapping: instrument -> client_order_id -> (ts_ns_local, intent_type)
@@ -194,6 +208,21 @@ class StrategyState:
             self.inflight[instrument] = inflight_bucket
 
         inflight_bucket[client_order_id] = InflightInfo(action=intent_type, ts_sent_ns_local=ts_now)
+
+        if intent_type != "new":
+            return
+
+        key = (instrument, client_order_id)
+        if key in self.canonical_orders:
+            return
+
+        self.canonical_orders[key] = CanonicalOrderProjection(
+            instrument=instrument,
+            client_order_id=client_order_id,
+            state="submitted",
+            submitted_ts_ns_local=ts_now,
+            updated_ts_ns_local=ts_now,
+        )
 
     def _clear_inflight(self, instrument: str, client_order_id: str) -> None:
         inflight_bucket = self.inflight.get(instrument)
@@ -492,6 +521,8 @@ class StrategyState:
         return False
 
     def apply_order_state_event(self, event: OrderStateEvent) -> None:
+        self._advance_canonical_order_projection(event)
+
         events_bucket = self.order_events.setdefault(event.instrument, deque())
         bucket = self.orders.setdefault(event.instrument, {})
         cur = bucket.get(event.client_order_id)
@@ -634,6 +665,22 @@ class StrategyState:
             return
 
         bucket[event.client_order_id] = snap
+
+    def _advance_canonical_order_projection(self, event: OrderStateEvent) -> None:
+        key = (event.instrument, event.client_order_id)
+        projection = self.canonical_orders.get(key)
+        if projection is None:
+            return
+
+        if event.state_type == "pending_new":
+            return
+        if event.state_type == "replaced":
+            return
+        if event.ts_ns_local < projection.updated_ts_ns_local:
+            return
+
+        projection.state = event.state_type
+        projection.updated_ts_ns_local = event.ts_ns_local
 
     # ---- Fills ----
 
