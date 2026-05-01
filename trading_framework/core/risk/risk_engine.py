@@ -392,9 +392,13 @@ class RiskEngine:
             )
             if rate_result.stage_to_queue:
                 to_queue_by_instr[it.instrument].append(it)
-                wake_ts = rate_result.wake_ts_ns_local
-                if wake_ts is not None:
-                    next_send_ts = wake_ts if next_send_ts is None else min(next_send_ts, wake_ts)
+                obligation = rate_result.scheduling_obligation
+                if obligation is not None:
+                    next_send_ts = (
+                        obligation.ts_ns_local
+                        if next_send_ts is None
+                        else min(next_send_ts, obligation.ts_ns_local)
+                    )
                 continue
 
             accepted_now.append(it)

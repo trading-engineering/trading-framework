@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable
 
 from trading_framework.core.domain.reject_reasons import RejectReason
 from trading_framework.core.domain.types import NewOrderIntent, OrderIntent
+from trading_framework.core.execution_control.types import ControlSchedulingObligation
 
 if TYPE_CHECKING:
     from trading_framework.core.domain.state import StrategyState
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 class _RateRoutingResult:
     accept_now: bool
     stage_to_queue: bool
-    wake_ts_ns_local: int | None
+    scheduling_obligation: ControlSchedulingObligation | None
 
 
 class ExecutionControl:
@@ -99,12 +100,15 @@ class ExecutionControl:
                     return _RateRoutingResult(
                         accept_now=False,
                         stage_to_queue=True,
-                        wake_ts_ns_local=wake_ts,
+                        scheduling_obligation=ControlSchedulingObligation(
+                            ts_ns_local=wake_ts,
+                            reason="rate_limit",
+                        ),
                     )
             return _RateRoutingResult(
                 accept_now=True,
                 stage_to_queue=False,
-                wake_ts_ns_local=None,
+                scheduling_obligation=None,
             )
 
         if max_orders_per_sec is not None:
@@ -115,13 +119,16 @@ class ExecutionControl:
                 return _RateRoutingResult(
                     accept_now=False,
                     stage_to_queue=True,
-                    wake_ts_ns_local=wake_ts,
+                    scheduling_obligation=ControlSchedulingObligation(
+                        ts_ns_local=wake_ts,
+                        reason="rate_limit",
+                    ),
                 )
 
         return _RateRoutingResult(
             accept_now=True,
             stage_to_queue=False,
-            wake_ts_ns_local=None,
+            scheduling_obligation=None,
         )
 
     def maybe_route_new_replace_to_queue_on_inflight(
