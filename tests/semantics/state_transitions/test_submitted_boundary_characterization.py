@@ -188,7 +188,7 @@ def test_mark_intent_sent_replace_and_cancel_do_not_create_canonical_submitted_o
 
     assert (instrument, "replace-1") not in state.canonical_orders
     assert (instrument, "cancel-1") not in state.canonical_orders
-    assert state.canonical_orders[(instrument, "existing-1")].state == "working"
+    assert state.canonical_orders[(instrument, "existing-1")].state == "accepted"
 
 
 def test_post_dispatch_feedback_advances_existing_canonical_projection() -> None:
@@ -211,5 +211,271 @@ def test_post_dispatch_feedback_advances_existing_canonical_projection() -> None
     )
 
     projection = state.canonical_orders[(instrument, client_order_id)]
-    assert projection.state == "working"
+    assert projection.state == "accepted"
     assert projection.updated_ts_ns_local == 550
+    assert state.orders[instrument][client_order_id].state_type == "working"
+
+
+def test_pending_new_does_not_advance_canonical_submitted_projection() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-pending-new-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(600)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+    before = state.canonical_orders[(instrument, client_order_id)]
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=610,
+            ts_ns_exch=610,
+            state_type="pending_new",
+            req=1,
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "submitted"
+    assert projection.updated_ts_ns_local == before.updated_ts_ns_local
+    assert state.orders[instrument][client_order_id].state_type == "pending_new"
+
+
+def test_accepted_advances_submitted_to_accepted() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-accepted-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(700)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=710,
+            ts_ns_exch=710,
+            state_type="accepted",
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "accepted"
+    assert projection.updated_ts_ns_local == 710
+    assert state.orders[instrument][client_order_id].state_type == "accepted"
+
+
+def test_rejected_advances_submitted_to_rejected_terminal() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-rejected-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(800)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=810,
+            ts_ns_exch=810,
+            state_type="rejected",
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "rejected"
+    assert projection.updated_ts_ns_local == 810
+    assert client_order_id not in state.orders.get(instrument, {})
+
+
+def test_partially_filled_and_filled_canonical_progression() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-fill-progression-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(900)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=910,
+            ts_ns_exch=910,
+            state_type="working",
+        )
+    )
+    assert state.canonical_orders[(instrument, client_order_id)].state == "accepted"
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=920,
+            ts_ns_exch=920,
+            state_type="partially_filled",
+        )
+    )
+    assert state.canonical_orders[(instrument, client_order_id)].state == "partially_filled"
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=930,
+            ts_ns_exch=930,
+            state_type="filled",
+        )
+    )
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "filled"
+    assert projection.updated_ts_ns_local == 930
+    assert client_order_id not in state.orders.get(instrument, {})
+
+
+def test_partially_filled_to_canceled_canonical_progression() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-cancel-progression-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(950)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=960,
+            ts_ns_exch=960,
+            state_type="accepted",
+        )
+    )
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=970,
+            ts_ns_exch=970,
+            state_type="partially_filled",
+        )
+    )
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=980,
+            ts_ns_exch=980,
+            state_type="canceled",
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "canceled"
+    assert projection.updated_ts_ns_local == 980
+    assert client_order_id not in state.orders.get(instrument, {})
+
+
+def test_terminal_canonical_state_is_final_noop_on_later_updates() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-terminal-final-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(1000)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=1010,
+            ts_ns_exch=1010,
+            state_type="working",
+        )
+    )
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=1020,
+            ts_ns_exch=1020,
+            state_type="filled",
+        )
+    )
+    assert state.canonical_orders[(instrument, client_order_id)].state == "filled"
+    assert state.canonical_orders[(instrument, client_order_id)].updated_ts_ns_local == 1020
+
+    # Invalid terminal transition should remain a no-op for canonical state.
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=1030,
+            ts_ns_exch=1030,
+            state_type="canceled",
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "filled"
+    assert projection.updated_ts_ns_local == 1020
+
+
+def test_replaced_does_not_advance_canonical_lifecycle() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-replaced-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(1100)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=1110,
+            ts_ns_exch=1110,
+            state_type="working",
+        )
+    )
+    before = state.canonical_orders[(instrument, client_order_id)]
+    assert before.state == "accepted"
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=1120,
+            ts_ns_exch=1120,
+            state_type="replaced",
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "accepted"
+    assert projection.updated_ts_ns_local == 1110
+
+
+def test_expired_does_not_introduce_canonical_expired_state() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-canonical-expired-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(1200)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument,
+            client_order_id,
+            ts_ns_local=1210,
+            ts_ns_exch=1210,
+            state_type="expired",
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "submitted"
+    assert projection.updated_ts_ns_local == 1200
+    assert client_order_id not in state.orders.get(instrument, {})

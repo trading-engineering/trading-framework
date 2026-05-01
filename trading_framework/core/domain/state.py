@@ -15,6 +15,10 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Iterable
 
+from trading_framework.core.domain.order_lifecycle import (
+    is_valid_canonical_order_transition,
+    normalize_compatibility_state_to_canonical,
+)
 from trading_framework.core.domain.order_state_machine import is_valid_transition
 from trading_framework.core.domain.slots import SlotKey, stable_slot_order_id
 from trading_framework.core.domain.types import OrderStateEvent
@@ -672,14 +676,15 @@ class StrategyState:
         if projection is None:
             return
 
-        if event.state_type == "pending_new":
-            return
-        if event.state_type == "replaced":
+        next_canonical_state = normalize_compatibility_state_to_canonical(event.state_type)
+        if next_canonical_state is None:
             return
         if event.ts_ns_local < projection.updated_ts_ns_local:
             return
+        if not is_valid_canonical_order_transition(projection.state, next_canonical_state):
+            return
 
-        projection.state = event.state_type
+        projection.state = next_canonical_state
         projection.updated_ts_ns_local = event.ts_ns_local
 
     # ---- Fills ----
