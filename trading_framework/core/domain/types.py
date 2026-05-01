@@ -1,8 +1,15 @@
 """Core shared data models and schemas.
 
-This module defines the canonical Pydantic models used across the system for
-market data, order intents, risk constraints, and execution events. These
-types are treated as schema definitions and intentionally prioritize
+This module defines Pydantic models used across the system for market data,
+order intents, risk constraints, and execution feedback.
+
+Semantic notes for this refactor slice:
+- ``MarketEvent`` is a canonical Market Event candidate.
+- ``FillEvent`` is tracked as a canonical Execution Event candidate.
+- ``OrderStateEvent`` remains a compatibility execution-feedback /
+  snapshot-materialization record for now.
+
+These models are treated as schema definitions and intentionally prioritize
 structural clarity over minimal class size.
 """
 

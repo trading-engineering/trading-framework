@@ -1,5 +1,7 @@
-"""
-Simple synchronous event bus.
+"""Simple synchronous sink fanout transport.
+
+This bus is an in-process transport for sinks (logging/recording/monitoring).
+It is not the canonical Event Stream abstraction.
 """
 from __future__ import annotations
 

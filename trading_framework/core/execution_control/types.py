@@ -1,4 +1,8 @@
-"""Execution control internal semantic types."""
+"""Execution-control internal semantic types.
+
+The types in this module are non-canonical runtime helpers. They are not
+canonical Events and are not part of the Event Stream taxonomy.
+"""
 
 from __future__ import annotations
 

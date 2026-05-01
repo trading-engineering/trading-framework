@@ -1,8 +1,13 @@
-"""
-Domain event models.
+"""Non-canonical telemetry and compatibility event records.
 
-These events represent immutable facts observed during execution.
-They are consumed by loggers, recorders, and monitoring pipelines.
+This module is intentionally separate from canonical Event Stream candidates.
+Records defined here are used for observability and compatibility projections:
+
+- telemetry / observability records (e.g. risk summaries, derived metrics)
+- compatibility projection artifacts (e.g. inferred fill deltas)
+
+These records are transport payloads for local sinks and must not be interpreted
+as canonical Event Stream semantics by default.
 """
 from __future__ import annotations
 

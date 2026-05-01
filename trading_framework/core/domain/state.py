@@ -1,8 +1,11 @@
 """Runtime strategy state management.
 
 This module maintains best-effort market, account, order, and queue state
-derived from venue snapshots and events. It is intentionally stateful and
-optimized for correctness and determinism rather than minimal complexity.
+derived from venue snapshots and events. Internal records in this module are
+derived-state structures, not canonical Event Stream records.
+
+It is intentionally stateful and optimized for correctness and determinism
+rather than minimal complexity.
 """
 
 # pylint: disable=line-too-long,too-many-instance-attributes,too-many-public-methods
