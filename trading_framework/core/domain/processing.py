@@ -1,7 +1,10 @@
 """Minimal canonical event processing boundary for core.
 
-This module introduces a narrow, docs-aligned processing boundary for canonical
-event candidates only. It is intentionally small:
+This module introduces a narrow, docs-aligned processing boundary for current
+canonical event candidates. For these candidates, ``process_canonical_event``
+is the preferred top-level canonical state-advance entrypoint in core.
+
+This module is intentionally small:
 
 - it is not a full Event Stream implementation;
 - it does not define or enforce Processing Order;
@@ -29,13 +32,19 @@ def process_canonical_event(
 ) -> None:
     """Process a canonical event candidate via existing state reducers.
 
+    Preferred usage for the current slice:
+    - use this function as the top-level canonical ingestion boundary for
+      currently supported canonical candidates.
+    - keep low-level reducer methods as compatibility primitives.
+
     Accepted canonical candidates in the current slice:
     - ``MarketEvent`` (category: ``market``)
     - ``FillEvent`` (category: ``execution``)
 
     ``ProcessingPosition`` is accepted as Processing Order metadata at this
-    boundary. This function does not yet implement full Event Stream ordering
-    or replay, and reducers preserve existing timestamp-based behavior.
+    boundary. This function is not a full Event Stream, replay, or Processing
+    Order enforcement layer, and reducers preserve existing timestamp-based
+    behavior.
 
     Non-canonical records (compatibility projections, telemetry payloads, bus
     transports, and helper artifacts) are rejected at this boundary.

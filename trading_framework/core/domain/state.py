@@ -313,6 +313,13 @@ class StrategyState:
         ts_ns_local: int,
         ts_ns_exch: int,
     ) -> None:
+        """Low-level market reducer primitive.
+
+        This method applies a market snapshot update directly to internal state.
+        It is intentionally preserved for compatibility and reducer-level tests.
+        For canonical candidates, prefer ``process_canonical_event`` as the
+        top-level canonical ingestion boundary.
+        """
         m = self.market.get(instrument)
         if m is None:
             m = MarketState()
@@ -699,6 +706,14 @@ class StrategyState:
     # This method is reserved for event-driven backends or live trading venues
     # that provide fill-level events.
     def apply_fill_event(self, event: FillEvent, *, max_keep: int = 10_000) -> None:
+        """Low-level fill reducer primitive.
+
+        This method applies fill deltas directly to internal state and emits the
+        fill event on the bus. It remains available for compatibility and
+        reducer-level parity testing. For canonical candidates, prefer
+        ``process_canonical_event`` as the top-level canonical ingestion
+        boundary.
+        """
         instrument = event.instrument
         client_order_id = event.client_order_id
 
