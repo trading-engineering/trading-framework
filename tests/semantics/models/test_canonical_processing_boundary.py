@@ -6,6 +6,7 @@ import pytest
 
 from trading_framework.core.domain.event_model import is_canonical_stream_candidate_type
 from trading_framework.core.domain.processing import process_canonical_event
+from trading_framework.core.domain.processing_order import ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
     FillEvent,
@@ -99,6 +100,23 @@ def test_process_canonical_event_accepts_market_event() -> None:
     assert market.mid == 100.5
 
 
+def test_process_canonical_event_accepts_market_event_with_processing_position() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
+    position = ProcessingPosition(index=5)
+
+    process_canonical_event(state, event, position=position)
+
+    market = state.market["BTC-USDC-PERP"]
+    assert market.last_ts_ns_local == 100
+    assert market.last_ts_ns_exch == 90
+    assert market.best_bid == 100.0
+    assert market.best_ask == 101.0
+    assert market.best_bid_qty == 2.0
+    assert market.best_ask_qty == 3.0
+    assert market.mid == 100.5
+
+
 def test_process_canonical_event_accepts_fill_event() -> None:
     state = StrategyState(event_bus=NullEventBus())
     event = _fill_event(
@@ -116,6 +134,36 @@ def test_process_canonical_event_accepts_fill_event() -> None:
     assert state.fill_cum_qty["BTC-USDC-PERP"]["order-1"] == 0.25
 
 
+def test_process_canonical_event_accepts_fill_event_with_processing_position() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _fill_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-1",
+        ts_ns_local=200,
+        ts_ns_exch=180,
+    )
+    position = ProcessingPosition(index=12)
+
+    process_canonical_event(state, event, position=position)
+
+    fills = state.fills["BTC-USDC-PERP"]
+    assert len(fills) == 1
+    assert fills[0] == event
+    assert state.fill_cum_qty["BTC-USDC-PERP"]["order-1"] == 0.25
+
+
+def test_processing_position_is_not_derived_from_event_time() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=1_000_000, ts_ns_exch=900_000)
+    position = ProcessingPosition(index=1)
+
+    process_canonical_event(state, event, position=position)
+
+    market = state.market["BTC-USDC-PERP"]
+    assert market.last_ts_ns_local == event.ts_ns_local
+    assert market.last_ts_ns_exch == event.ts_ns_exch
+
+
 def test_process_canonical_event_rejects_order_state_event() -> None:
     state = StrategyState(event_bus=NullEventBus())
     event = _order_state_event(
@@ -127,6 +175,20 @@ def test_process_canonical_event_rejects_order_state_event() -> None:
 
     with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
         process_canonical_event(state, event)
+
+
+def test_process_canonical_event_rejects_order_state_event_with_processing_position() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _order_state_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-compat-1",
+        ts_ns_local=300,
+        ts_ns_exch=290,
+    )
+    position = ProcessingPosition(index=20)
+
+    with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
+        process_canonical_event(state, event, position=position)
 
 
 def test_process_canonical_event_rejects_telemetry_record() -> None:
@@ -146,4 +208,14 @@ def test_process_canonical_event_rejects_telemetry_record() -> None:
 
 def test_event_bus_remains_non_canonical() -> None:
     assert is_canonical_stream_candidate_type(EventBus) is False
+
+
+def test_processing_position_zero_index_is_valid() -> None:
+    position = ProcessingPosition(index=0)
+    assert position.index == 0
+
+
+def test_processing_position_negative_index_is_rejected() -> None:
+    with pytest.raises(ValueError, match="must be non-negative"):
+        ProcessingPosition(index=-1)
 

@@ -16,20 +16,31 @@ from trading_framework.core.domain.event_model import (
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
 )
+from trading_framework.core.domain.processing_order import ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import FillEvent, MarketEvent
 
 
-def process_canonical_event(state: StrategyState, event: object) -> None:
+def process_canonical_event(
+    state: StrategyState,
+    event: object,
+    *,
+    position: ProcessingPosition | None = None,
+) -> None:
     """Process a canonical event candidate via existing state reducers.
 
     Accepted canonical candidates in the current slice:
     - ``MarketEvent`` (category: ``market``)
     - ``FillEvent`` (category: ``execution``)
 
+    ``ProcessingPosition`` is accepted as Processing Order metadata at this
+    boundary. This function does not yet implement full Event Stream ordering
+    or replay, and reducers preserve existing timestamp-based behavior.
+
     Non-canonical records (compatibility projections, telemetry payloads, bus
     transports, and helper artifacts) are rejected at this boundary.
     """
+    _ = position
 
     record_type = type(event)
     if not is_canonical_stream_candidate_type(record_type):
