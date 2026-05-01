@@ -7,7 +7,7 @@ is the preferred top-level canonical state-advance entrypoint in core.
 This module is intentionally small:
 
 - it is not a full Event Stream implementation;
-- it does not define or enforce Processing Order;
+- it enforces only minimal positioned monotonicity at the boundary;
 - it does not implement replay semantics;
 - compatibility ingestion paths remain separate.
 """
@@ -42,15 +42,13 @@ def process_canonical_event(
     - ``FillEvent`` (category: ``execution``)
 
     ``ProcessingPosition`` is accepted as Processing Order metadata at this
-    boundary. This function is not a full Event Stream, replay, or Processing
-    Order enforcement layer, and reducers preserve existing timestamp-based
-    behavior.
+    boundary. When provided, positions must be strictly increasing. This
+    function is not a full Event Stream or replay layer, and reducers preserve
+    existing timestamp-based behavior.
 
     Non-canonical records (compatibility projections, telemetry payloads, bus
     transports, and helper artifacts) are rejected at this boundary.
     """
-    _ = position
-
     record_type = type(event)
     if not is_canonical_stream_candidate_type(record_type):
         raise TypeError(f"Unsupported non-canonical event type: {record_type.__name__}")
@@ -72,6 +70,9 @@ def process_canonical_event(
         best_bid_level = event.book.bids[0]
         best_ask_level = event.book.asks[0]
 
+        if position is not None:
+            state._advance_processing_position(position)
+
         state.update_market(
             instrument=event.instrument,
             best_bid=best_bid_level.price.value,
@@ -87,6 +88,8 @@ def process_canonical_event(
         return
 
     if category == CanonicalEventCategory.EXECUTION and isinstance(event, FillEvent):
+        if position is not None:
+            state._advance_processing_position(position)
         state.apply_fill_event(event)
         return
 

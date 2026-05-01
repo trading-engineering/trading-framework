@@ -23,6 +23,7 @@ from trading_framework.core.domain.order_lifecycle import (
     normalize_compatibility_state_to_canonical,
 )
 from trading_framework.core.domain.order_state_machine import is_valid_transition
+from trading_framework.core.domain.processing_order import ProcessingPosition
 from trading_framework.core.domain.slots import SlotKey, stable_slot_order_id
 from trading_framework.core.domain.types import OrderStateEvent
 from trading_framework.core.events.events import (
@@ -186,6 +187,10 @@ class StrategyState:
         # This is the single time reference used for gating and risk decisions.
         self.last_ts_ns_local: int = 0
 
+        # Migration-step Processing Order cursor metadata.
+        # Private: boundary-owned by process_canonical_event only.
+        self._last_processing_position_index: int | None = None
+
     # ---- Timestamp ----
     def update_timestamp(self, ts_ns_local: int) -> None:
         # Monotone simulation time: never regress.
@@ -196,6 +201,19 @@ class StrategyState:
     def sim_ts_ns_local(self) -> int:
         """Canonical monotone simulation time (ns, local axis)."""
         return self.last_ts_ns_local
+
+    def _advance_processing_position(self, position: ProcessingPosition) -> None:
+        """Advance private Processing Order cursor for positioned canonical events."""
+        last = self._last_processing_position_index
+        next_index = position.index
+
+        if last is not None and next_index <= last:
+            raise ValueError(
+                "Non-monotonic ProcessingPosition index: "
+                f"received {next_index} after {last}."
+            )
+
+        self._last_processing_position_index = next_index
 
     def mark_intent_sent(self, instrument: str, client_order_id: str, intent_type: str) -> None:
         """Record that an intent was sent to the execution layer.
