@@ -4,12 +4,12 @@
 
 ## Purpose and scope
 
-This document defines an implementation-facing boundary contract for a future
-dispatch-time canonical order-entry record named `OrderSubmittedEvent`.
+This document defines an implementation-facing boundary contract snapshot for the
+dispatch-time canonical order-entry record `OrderSubmittedEvent` after initial
+runtime wiring.
 
-This is a docs-contract slice only:
+This is a docs-contract reconciliation slice only:
 
-- it does not implement `OrderSubmittedEvent`;
 - it does not change runtime behavior;
 - it does not change snapshot compatibility reducers;
 - it does not canonicalize `OrderStateEvent`;
@@ -29,8 +29,9 @@ for the dispatch-time Submitted boundary. It does not redefine architecture
 semantics.
 
 `OSEC-03` - Existing `core` implementation snapshot semantics remain governed by
-[Core Stable Contract v1](core-stable-contract-v1.md). This contract is additive
-for planned boundary behavior and does not claim implementation in this slice.
+[Core Stable Contract v1](core-stable-contract-v1.md). This contract records the
+implemented Submitted-boundary slice and its transition constraints; it does not
+claim full order/execution lifecycle canonicalization.
 
 Normative semantic sources:
 
@@ -57,9 +58,8 @@ Normative semantic sources:
   from infrastructure processing.
 - Therefore the semantic class is Intent-related Event, not Execution Event.
 
-`OSEC-07` - This classification is additive beyond current `core` stable
-contract v1 canonical candidate set and does not modify current candidate
-implementation behavior in this docs slice.
+`OSEC-07` - This classification is implemented in current `core` v1 candidate
+taxonomy and canonical processing boundary behavior.
 
 ---
 
@@ -81,11 +81,10 @@ transmission/dispatch of a `new` intent.
 
 ---
 
-## Required field contract (v1)
+## Required field contract (v1, implemented boundary shape)
 
-`OSEC-12` - Required fields:
+`OSEC-12` - Required canonical boundary fields in this implemented slice:
 
-- `position` (canonical ProcessingPosition / stream position authority)
 - `ts_ns_local_dispatch`
 - `instrument`
 - `client_order_id`
@@ -94,6 +93,10 @@ transmission/dispatch of a `new` intent.
 - `intended_price`
 - `intended_qty`
 - `time_in_force`
+
+Canonical ProcessingPosition authority is carried by `EventStreamEntry.position`
+at canonical ingestion (`process_event_entry` / `process_canonical_event`), not
+as an inline `OrderSubmittedEvent` model field in this slice.
 
 `OSEC-13` - Optional/correlation fields when available:
 
@@ -123,20 +126,25 @@ restart lifecycle from `Submitted`.
 
 ## Projection and coexistence behavior (transitional)
 
-`OSEC-19` - Once implemented, `OrderSubmittedEvent` is the canonical authority
-for entering `Submitted`.
+`OSEC-19` - `OrderSubmittedEvent` is the canonical authority for entering
+`Submitted` in the current implemented boundary slice.
 
-`OSEC-20` - `CanonicalOrderProjection` should be created/advanced to
-`submitted` from the `OrderSubmittedEvent` path when implementation begins.
+`OSEC-20` - `CanonicalOrderProjection` is created/preserved at `submitted` from
+the `OrderSubmittedEvent` reducer path in the current implemented slice.
 
 `OSEC-21` - `mark_intent_sent` remains compatibility/execution-control
 bookkeeping during transition.
 
-`OSEC-22` - Transitional coexistence requirement: `mark_intent_sent`-based
+`OSEC-22` - In current HFT runtime wiring, `OrderSubmittedEvent` processing is
+performed before `mark_intent_sent` for successful `new` dispatches. Failed
+`new` dispatches produce no `OrderSubmittedEvent`, and replace/cancel dispatches
+produce no `OrderSubmittedEvent`.
+
+`OSEC-23` - Transitional coexistence requirement: `mark_intent_sent`-based
 submitted sidecar seeding must be treated as idempotent/mirrored behavior under
 future coexistence with `OrderSubmittedEvent`.
 
-`OSEC-23` - This contract introduces no post-submission transition authority.
+`OSEC-24` - This contract introduces no post-submission transition authority.
 Post-submission canonical authority remains deferred pending explicit canonical
 execution-feedback source.
 
@@ -144,68 +152,71 @@ execution-feedback source.
 
 ## ProcessingPosition policy
 
-`OSEC-24` - Canonical acceptance order uses one global canonical position
+`OSEC-25` - Canonical acceptance order uses one global canonical position
 counter across canonical event categories.
 
-`OSEC-25` - Category-local canonical counters are not allowed.
+`OSEC-26` - Category-local canonical counters are not allowed.
 
-`OSEC-26` - Position must not be derived from timestamps.
+`OSEC-27` - Position must not be derived from timestamps.
 
-`OSEC-27` - Ordering semantics must be coherent relative to canonical
+`OSEC-28` - Ordering semantics must be coherent relative to canonical
 `MarketEvent` and future canonical execution-feedback records.
 
 ---
 
 ## Compatibility boundaries preserved
 
-`OSEC-28` - `OrderStateEvent` remains non-canonical.
+`OSEC-29` - `OrderStateEvent` remains non-canonical.
 
-`OSEC-29` - `ingest_order_snapshots` behavior remains unchanged.
+`OSEC-30` - `ingest_order_snapshots` behavior remains unchanged.
 
-`OSEC-30` - `DerivedFillEvent` remains compatibility projection behavior.
+`OSEC-31` - `DerivedFillEvent` remains compatibility projection behavior.
 
-`OSEC-31` - `FillEvent` ingress remains deferred.
+`OSEC-32` - `FillEvent` ingress remains deferred.
 
-`OSEC-32` - Snapshot reducer behavior remains unchanged; no rewrite is introduced
+`OSEC-33` - Snapshot reducer behavior remains unchanged; no rewrite is introduced
 by this contract.
 
-`OSEC-33` - This docs slice introduces no runtime behavior change.
+`OSEC-34` - This docs slice introduces no runtime behavior change.
 
 ---
 
 ## No-double-authority rules
 
-`OSEC-34` - Submitted entry authority belongs to `OrderSubmittedEvent` once
-implemented.
+`OSEC-35` - Submitted entry authority belongs to `OrderSubmittedEvent` in this
+implemented slice.
 
-`OSEC-35` - Compatibility snapshots may mirror/advance sidecar projections only
+`OSEC-36` - Compatibility snapshots may mirror/advance sidecar projections only
 under transitional compatibility rules; they are not canonical Submitted
 authority.
 
-`OSEC-36` - Post-submission transitions remain deferred until explicit canonical
+`OSEC-37` - Post-submission transitions remain deferred until explicit canonical
 execution-feedback sources are defined and contracted.
 
-`OSEC-37` - Snapshot materialization must not become canonical Submitted
+`OSEC-38` - Snapshot materialization must not become canonical Submitted
 authority in this phase.
 
 ---
 
 ## Explicitly out of scope
 
-`OSEC-38` - Implementing the `OrderSubmittedEvent` class.
+`OSEC-39` - Changing `OrderSubmittedEvent` model shape beyond current implemented
+contract fields.
 
-`OSEC-39` - Event taxonomy code changes.
+`OSEC-40` - Event taxonomy semantic reclassification beyond current implemented
+`intent_related` status.
 
-`OSEC-40` - Runtime dispatch wiring changes.
+`OSEC-41` - Runtime dispatch behavior expansion beyond current successful `new`
+dispatch emission semantics.
 
-`OSEC-41` - `FillEvent` ingress implementation.
+`OSEC-42` - `FillEvent` ingress implementation.
 
-`OSEC-42` - `OrderStateEvent` canonicalization.
+`OSEC-43` - `OrderStateEvent` canonicalization.
 
-`OSEC-43` - Replay/storage/`ProcessingContext`/`EventStreamCursor`
+`OSEC-44` - Replay/storage/`ProcessingContext`/`EventStreamCursor`
 implementation.
 
-`OSEC-44` - Broad order lifecycle migration or snapshot reducer migration.
+`OSEC-45` - Broad order lifecycle migration or snapshot reducer migration.
 
 ---
 

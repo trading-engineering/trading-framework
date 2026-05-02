@@ -50,9 +50,10 @@ Historical provenance for the positioned market configuration closure is recorde
 `CSC-06` — `core` v1 currently guarantees the canonical event candidate set:
 
 - `MarketEvent` (market category candidate)
+- `OrderSubmittedEvent` (intent-related category candidate)
 - `FillEvent` (execution category candidate)
 
-`CSC-07` — No additional canonical event categories or candidate types are guaranteed by `core` v1 in this contract snapshot.
+`CSC-07` — Current canonical runtime wiring in this snapshot processes positioned canonical `MarketEvent` and `OrderSubmittedEvent` through the canonical boundary. `FillEvent` remains a canonical execution candidate in `core`, while runtime `FillEvent` ingress remains deferred per [Runtime Execution Feedback Contract v1](runtime-execution-feedback-contract-v1.md).
 
 ---
 
@@ -181,7 +182,7 @@ Historical provenance for the positioned market configuration closure is recorde
 | Clause(s) | Contract statement (summary) | Existing semantics test anchors |
 | --------- | ---------------------------- | ------------------------------- |
 | `CSC-04`, `CSC-05` | Canonical boundary API surface and minimal scope | `core/tests/semantics/models/test_canonical_processing_boundary.py`, `core/tests/semantics/models/test_event_stream_entry_contract.py`, `core/tests/semantics/models/test_fold_event_stream_entries_contract.py` |
-| `CSC-06`, `CSC-07` | Canonical candidate set is MarketEvent + FillEvent only in v1 | `core/tests/semantics/models/test_event_taxonomy_boundary.py`, `core/tests/semantics/models/test_canonical_processing_boundary.py` |
+| `CSC-06`, `CSC-07` | Canonical candidate set is MarketEvent + OrderSubmittedEvent + FillEvent; current runtime wiring path is MarketEvent + OrderSubmittedEvent while FillEvent ingress remains deferred | `core/tests/semantics/models/test_event_taxonomy_boundary.py`, `core/tests/semantics/models/test_canonical_processing_boundary.py` |
 | `CSC-08` to `CSC-13` | Non-canonical classifications (compatibility/telemetry/control helper/transport) | `core/tests/semantics/models/test_event_taxonomy_boundary.py`, `core/tests/semantics/models/test_canonical_processing_boundary.py`, `core/tests/semantics/models/test_event_stream_entry_contract.py` |
 | `CSC-14` to `CSC-17` | ProcessingPosition monotonic positioned boundary and cursor guarantees | `core/tests/semantics/models/test_canonical_processing_boundary.py`, `core/tests/semantics/models/test_event_stream_entry_contract.py`, `core/tests/semantics/models/test_fold_event_stream_entries_contract.py`, `core/tests/semantics/models/test_processing_position_cursor_ownership_guard.py` |
 | `CSC-18` to `CSC-20` | EventStreamEntry shape and call-level configuration boundary | `core/tests/semantics/models/test_event_stream_entry_contract.py` |

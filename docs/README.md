@@ -21,9 +21,9 @@ semantics.
   runtime execution feedback emission (including `FillEvent`), while preserving
   current compatibility projection behavior.
 
-- **[boundary/planned]** [OrderSubmittedEvent / Dispatch Boundary Contract v1](order-submitted-event-contract-v1.md)  
-  Planned boundary contract freezing dispatch-time canonical order-entry
-  semantics for `Submitted` lifecycle authority prior to implementation wiring.
+- **[boundary/implemented-transition]** [OrderSubmittedEvent / Dispatch Boundary Contract v1](order-submitted-event-contract-v1.md)  
+  Implemented-transition boundary contract for dispatch-time canonical
+  order-entry semantics and coexistence constraints around `Submitted` authority.
 
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
