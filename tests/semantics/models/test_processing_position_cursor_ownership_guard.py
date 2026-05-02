@@ -9,6 +9,7 @@ _ALLOWED_CALLER = Path("trading_framework/core/domain/processing.py")
 _ALLOWED_MUTATION_FILE = Path("trading_framework/core/domain/state.py")
 _TARGET_METHOD = "_advance_processing_position"
 _TARGET_ATTR = "_last_processing_position_index"
+_POSITIONED_MARKET_TARGET_METHOD = "_update_market_from_positioned_canonical_event"
 
 
 def _iter_python_files(root: Path) -> list[Path]:
@@ -25,6 +26,22 @@ def _find_target_method_calls(path: Path) -> list[tuple[int, int]]:
         if not isinstance(node.func, ast.Attribute):
             continue
         if node.func.attr != _TARGET_METHOD:
+            continue
+        calls.append((node.lineno, node.col_offset))
+
+    return calls
+
+
+def _find_positioned_market_target_method_calls(path: Path) -> list[tuple[int, int]]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    calls: list[tuple[int, int]] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != _POSITIONED_MARKET_TARGET_METHOD:
             continue
         calls.append((node.lineno, node.col_offset))
 
@@ -83,4 +100,26 @@ def test_processing_position_cursor_is_mutated_only_via_canonical_boundary() -> 
     assert not mutation_violations, (
         "Unexpected ProcessingPosition cursor mutations outside StrategyState:\n"
         + "\n".join(mutation_violations)
+    )
+
+
+def test_positioned_market_helper_is_called_only_via_canonical_boundary() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    production_root = repo_root / "trading_framework"
+
+    call_violations: list[str] = []
+
+    for file_path in _iter_python_files(production_root):
+        relative_path = file_path.relative_to(repo_root)
+        method_calls = _find_positioned_market_target_method_calls(file_path)
+        if method_calls and relative_path != _ALLOWED_CALLER:
+            for lineno, col in method_calls:
+                call_violations.append(
+                    f"{relative_path}:{lineno}:{col} calls "
+                    f"{_POSITIONED_MARKET_TARGET_METHOD}(...)"
+                )
+
+    assert not call_violations, (
+        "Unexpected positioned market helper calls outside canonical boundary:\n"
+        + "\n".join(call_violations)
     )
