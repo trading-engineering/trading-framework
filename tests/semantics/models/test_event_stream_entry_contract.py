@@ -103,6 +103,29 @@ def _state_subset_snapshot(state: StrategyState) -> dict[str, object]:
     }
 
 
+def _market_configuration(
+    *,
+    instrument: str = "BTC-USDC-PERP",
+    tick_size: float = 0.1,
+    lot_size: float = 0.01,
+    contract_size: float = 1.0,
+) -> CoreConfiguration:
+    return CoreConfiguration(
+        version="v1",
+        payload={
+            "market": {
+                "instruments": {
+                    instrument: {
+                        "tick_size": tick_size,
+                        "lot_size": lot_size,
+                        "contract_size": contract_size,
+                    }
+                }
+            }
+        },
+    )
+
+
 def test_event_stream_entry_requires_processing_position() -> None:
     with pytest.raises(TypeError, match="position must be a ProcessingPosition"):
         EventStreamEntry(position=object(), event={"x": 1})
@@ -128,7 +151,7 @@ def test_process_event_entry_processes_market_and_advances_state() -> None:
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
     entry = EventStreamEntry(position=ProcessingPosition(index=0), event=event)
 
-    process_event_entry(state, entry)
+    process_event_entry(state, entry, configuration=_market_configuration())
 
     market = state.market["BTC-USDC-PERP"]
     assert state._last_processing_position_index == 0
@@ -201,8 +224,8 @@ def test_process_event_entry_enforces_processing_position_monotonicity() -> None
         ),
     )
 
-    process_event_entry(state, first)
-    process_event_entry(state, second)
+    process_event_entry(state, first, configuration=_market_configuration())
+    process_event_entry(state, second, configuration=None)
     assert state._last_processing_position_index == 11
     before = _state_subset_snapshot(state)
 
@@ -215,20 +238,33 @@ def test_process_event_entry_enforces_processing_position_monotonicity() -> None
     assert state._last_processing_position_index == 11
 
 
-def test_configuration_parameter_is_explicit_but_not_consumed_yet() -> None:
+def test_process_event_entry_positioned_market_requires_configuration() -> None:
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
     entry = EventStreamEntry(position=ProcessingPosition(index=0), event=event)
-    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
+    state = StrategyState(event_bus=NullEventBus())
 
-    state_without_config = StrategyState(event_bus=NullEventBus())
-    state_with_config = StrategyState(event_bus=NullEventBus())
+    with pytest.raises(
+        ValueError,
+        match="CoreConfiguration is required for positioned canonical MarketEvent processing",
+    ):
+        process_event_entry(state, entry, configuration=None)
 
-    process_event_entry(state_without_config, entry)
-    process_event_entry(state_with_config, entry, configuration=configuration)
 
-    assert _state_subset_snapshot(state_with_config) == _state_subset_snapshot(
-        state_without_config
+def test_process_event_entry_positioned_fill_remains_configuration_agnostic() -> None:
+    event = _fill_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-1",
+        ts_ns_local=200,
+        ts_ns_exch=180,
     )
+    entry = EventStreamEntry(position=ProcessingPosition(index=5), event=event)
+    state = StrategyState(event_bus=NullEventBus())
+
+    process_event_entry(state, entry, configuration=None)
+
+    assert state._last_processing_position_index == 5
+    assert len(state.fills["BTC-USDC-PERP"]) == 1
+    assert state.fill_cum_qty["BTC-USDC-PERP"]["order-1"] == 0.25
 
 
 def test_process_event_entry_rejects_non_core_configuration() -> None:

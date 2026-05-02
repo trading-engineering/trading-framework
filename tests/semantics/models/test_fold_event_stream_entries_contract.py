@@ -111,6 +111,30 @@ def _entry(position: int, event: object) -> EventStreamEntry:
     return EventStreamEntry(position=ProcessingPosition(index=position), event=event)
 
 
+def _market_configuration(
+    *,
+    instrument: str = "BTC-USDC-PERP",
+    tick_size: float = 0.1,
+    lot_size: float = 0.01,
+    contract_size: float = 1.0,
+    version: str = "v1",
+) -> CoreConfiguration:
+    return CoreConfiguration(
+        version=version,
+        payload={
+            "market": {
+                "instruments": {
+                    instrument: {
+                        "tick_size": tick_size,
+                        "lot_size": lot_size,
+                        "contract_size": contract_size,
+                    }
+                }
+            }
+        },
+    )
+
+
 def test_fold_same_entries_same_configuration_produces_equivalent_final_state() -> None:
     entries = [
         _entry(
@@ -134,7 +158,7 @@ def test_fold_same_entries_same_configuration_produces_equivalent_final_state() 
             ),
         ),
     ]
-    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
+    configuration = _market_configuration()
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -169,14 +193,8 @@ def test_fold_uses_single_explicit_configuration_input_with_stable_identity() ->
             ),
         ),
     ]
-    cfg_v1_left = CoreConfiguration(
-        version="v1",
-        payload={"risk_mode": "strict", "limits": {"max_open_orders": 4}},
-    )
-    cfg_v1_right = CoreConfiguration(
-        version="v1",
-        payload={"limits": {"max_open_orders": 4}, "risk_mode": "strict"},
-    )
+    cfg_v1_left = _market_configuration(version="v1")
+    cfg_v1_right = _market_configuration(version="v1")
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -221,7 +239,7 @@ def test_fold_same_prefix_produces_equivalent_prefix_state() -> None:
             ),
         ),
     ]
-    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
+    configuration = _market_configuration()
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -258,7 +276,7 @@ def test_fold_repeated_or_regressing_processing_position_raises_deterministicall
     ]
 
     with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
-        fold_event_stream_entries(repeated_state, repeated_entries)
+        fold_event_stream_entries(repeated_state, repeated_entries, configuration=_market_configuration())
 
     regressing_state = StrategyState(event_bus=NullEventBus())
     regressing_entries = [
@@ -285,7 +303,7 @@ def test_fold_repeated_or_regressing_processing_position_raises_deterministicall
     ]
 
     with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
-        fold_event_stream_entries(regressing_state, regressing_entries)
+        fold_event_stream_entries(regressing_state, regressing_entries, configuration=_market_configuration())
 
 
 def test_fold_positioned_market_ordering_follows_processing_position_not_event_time() -> None:
@@ -313,7 +331,7 @@ def test_fold_positioned_market_ordering_follows_processing_position_not_event_t
         ),
     ]
 
-    fold_event_stream_entries(state, entries)
+    fold_event_stream_entries(state, entries, configuration=_market_configuration())
 
     market = state.market["BTC-USDC-PERP"]
     assert market.best_bid == 120.0
@@ -396,7 +414,7 @@ def test_fold_returns_same_state_object_for_ergonomics() -> None:
         )
     ]
 
-    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
+    configuration = _market_configuration()
     returned = fold_event_stream_entries(state, entries, configuration=configuration)
 
     assert returned is state
@@ -421,7 +439,7 @@ def test_fold_rejects_non_core_configuration() -> None:
         fold_event_stream_entries(state, entries, configuration={"version": "v1"})
 
 
-def test_fold_different_configuration_values_currently_produce_same_state_transitionally() -> None:
+def test_fold_different_market_configuration_values_produce_different_market_metadata() -> None:
     entries = [
         _entry(
             0,
@@ -444,8 +462,18 @@ def test_fold_different_configuration_values_currently_produce_same_state_transi
             ),
         ),
     ]
-    configuration_a = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
-    configuration_b = CoreConfiguration(version="v2", payload={"risk_mode": "lenient"})
+    configuration_a = _market_configuration(
+        tick_size=0.1,
+        lot_size=0.01,
+        contract_size=1.0,
+        version="v1",
+    )
+    configuration_b = _market_configuration(
+        tick_size=0.5,
+        lot_size=0.05,
+        contract_size=2.0,
+        version="v2",
+    )
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -453,10 +481,20 @@ def test_fold_different_configuration_values_currently_produce_same_state_transi
     fold_event_stream_entries(left, entries, configuration=configuration_a)
     fold_event_stream_entries(right, entries, configuration=configuration_b)
 
-    # Transitional contract: configuration is explicit and validated at boundary,
-    # but current reducers do not consume it yet.
     assert configuration_a.fingerprint != configuration_b.fingerprint
-    assert _state_subset_snapshot(left) == _state_subset_snapshot(right)
+    assert _state_subset_snapshot(left) != _state_subset_snapshot(right)
+    left_market = left.market["BTC-USDC-PERP"]
+    right_market = right.market["BTC-USDC-PERP"]
+    assert (left_market.tick_size, left_market.lot_size, left_market.contract_size) == (
+        0.1,
+        0.01,
+        1.0,
+    )
+    assert (right_market.tick_size, right_market.lot_size, right_market.contract_size) == (
+        0.5,
+        0.05,
+        2.0,
+    )
 
 
 def test_fold_configuration_identity_stays_stable_after_source_payload_mutation() -> None:
@@ -484,17 +522,23 @@ def test_fold_configuration_identity_stays_stable_after_source_payload_mutation(
         ),
     ]
     source_payload = {
-        "risk_mode": "strict",
-        "limits": {"max_open_orders": 4},
-        "symbols": ["BTC-USDC-PERP"],
+        "market": {
+            "instruments": {
+                "BTC-USDC-PERP": {
+                    "tick_size": 0.1,
+                    "lot_size": 0.01,
+                    "contract_size": 1.0,
+                }
+            }
+        }
     }
     configuration = CoreConfiguration(version="v1", payload=source_payload)
     fingerprint_before = configuration.fingerprint
     payload_before = configuration.payload
 
-    source_payload["risk_mode"] = "lenient"
-    source_payload["limits"]["max_open_orders"] = 1
-    source_payload["symbols"].append("ETH-USDC-PERP")
+    source_payload["market"]["instruments"]["BTC-USDC-PERP"]["tick_size"] = 0.5
+    source_payload["market"]["instruments"]["BTC-USDC-PERP"]["lot_size"] = 0.5
+    source_payload["market"]["instruments"]["BTC-USDC-PERP"]["contract_size"] = 5.0
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -502,7 +546,7 @@ def test_fold_configuration_identity_stays_stable_after_source_payload_mutation(
     fold_event_stream_entries(left, entries, configuration=configuration)
     fold_event_stream_entries(right, entries, configuration=configuration)
 
-    source_payload["limits"]["max_open_orders"] = 99
+    source_payload["market"]["instruments"]["BTC-USDC-PERP"]["tick_size"] = 99.0
 
     assert configuration.fingerprint == fingerprint_before
     assert configuration.payload == payload_before

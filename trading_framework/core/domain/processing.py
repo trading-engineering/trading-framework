@@ -14,7 +14,8 @@ This module is intentionally small:
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import math
+from collections.abc import Iterable, Mapping
 
 from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.event_model import (
@@ -27,11 +28,71 @@ from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import FillEvent, MarketEvent
 
 
+def _extract_required_positive_number(value: object, *, field_path: str) -> float:
+    if value is None:
+        raise ValueError(f"Missing required market configuration field: {field_path}")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"Market configuration field must be numeric: {field_path}")
+
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise ValueError(f"Market configuration field must be finite: {field_path}")
+    if numeric <= 0.0:
+        raise ValueError(f"Market configuration field must be > 0: {field_path}")
+    return numeric
+
+
+def _extract_market_instrument_metadata(
+    configuration: CoreConfiguration | None,
+    *,
+    instrument: str,
+) -> tuple[float, float, float]:
+    if configuration is None:
+        raise ValueError(
+            "CoreConfiguration is required for positioned canonical MarketEvent processing."
+        )
+
+    payload = configuration.payload
+
+    market = payload.get("market")
+    if not isinstance(market, Mapping):
+        raise ValueError("Missing required market configuration object: payload.market")
+
+    instruments = market.get("instruments")
+    if not isinstance(instruments, Mapping):
+        raise ValueError(
+            "Missing required market configuration object: payload.market.instruments"
+        )
+
+    instrument_cfg = instruments.get(instrument)
+    if not isinstance(instrument_cfg, Mapping):
+        raise ValueError(
+            "Missing required market instrument configuration: "
+            f"payload.market.instruments.{instrument}"
+        )
+
+    tick_size = _extract_required_positive_number(
+        instrument_cfg.get("tick_size"),
+        field_path=f"payload.market.instruments.{instrument}.tick_size",
+    )
+    lot_size = _extract_required_positive_number(
+        instrument_cfg.get("lot_size"),
+        field_path=f"payload.market.instruments.{instrument}.lot_size",
+    )
+    contract_size = _extract_required_positive_number(
+        instrument_cfg.get("contract_size"),
+        field_path=f"payload.market.instruments.{instrument}.contract_size",
+    )
+
+    return tick_size, lot_size, contract_size
+
+
 def process_canonical_event(
     state: StrategyState,
     event: object,
     *,
     position: ProcessingPosition | None = None,
+    configuration: CoreConfiguration | None = None,
 ) -> None:
     """Process a canonical event candidate via existing state reducers.
 
@@ -73,6 +134,10 @@ def process_canonical_event(
         best_ask_level = event.book.asks[0]
 
         if position is not None:
+            tick_size, lot_size, contract_size = _extract_market_instrument_metadata(
+                configuration,
+                instrument=event.instrument,
+            )
             state._advance_processing_position(position)
             state._update_market_from_positioned_canonical_event(
                 instrument=event.instrument,
@@ -80,9 +145,9 @@ def process_canonical_event(
                 best_ask=best_ask_level.price.value,
                 best_bid_qty=best_bid_level.quantity.value,
                 best_ask_qty=best_ask_level.quantity.value,
-                tick_size=0.0,
-                lot_size=0.0,
-                contract_size=1.0,
+                tick_size=tick_size,
+                lot_size=lot_size,
+                contract_size=contract_size,
                 ts_ns_local=event.ts_ns_local,
                 ts_ns_exch=event.ts_ns_exch,
             )
@@ -127,13 +192,19 @@ def process_event_entry(
     - it is not runtime integration.
 
     Configuration is accepted as explicit processing input to reflect the
-    docs contract, but current minimal reducers do not consume it yet.
+    docs contract. In this slice, positioned canonical MarketEvent reduction
+    consumes explicit instrument metadata from configuration.
     Ordering is enforced through ``entry.position`` using existing
     ``ProcessingPosition`` cursor monotonicity logic in canonical processing.
     """
     if configuration is not None and not isinstance(configuration, CoreConfiguration):
         raise TypeError("configuration must be CoreConfiguration or None")
-    process_canonical_event(state, entry.event, position=entry.position)
+    process_canonical_event(
+        state,
+        entry.event,
+        position=entry.position,
+        configuration=configuration,
+    )
 
 
 def fold_event_stream_entries(

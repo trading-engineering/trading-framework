@@ -12,6 +12,7 @@ import copy
 
 import pytest
 
+from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.processing import process_canonical_event
 from trading_framework.core.domain.processing_order import ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
@@ -23,6 +24,29 @@ from trading_framework.core.domain.types import (
     Quantity,
 )
 from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+
+
+def _market_configuration(
+    *,
+    instrument: str = "BTC-USDC-PERP",
+    tick_size: float = 0.1,
+    lot_size: float = 0.01,
+    contract_size: float = 1.0,
+) -> CoreConfiguration:
+    return CoreConfiguration(
+        version="v1",
+        payload={
+            "market": {
+                "instruments": {
+                    instrument: {
+                        "tick_size": tick_size,
+                        "lot_size": lot_size,
+                        "contract_size": contract_size,
+                    }
+                }
+            }
+        },
+    )
 
 
 def _book_market_event(
@@ -125,8 +149,19 @@ def test_target_positioned_market_lower_local_timestamp_still_advances_state() -
         best_ask=121.0,
     )
 
-    process_canonical_event(state, first, position=ProcessingPosition(index=1))
-    process_canonical_event(state, older_local_second, position=ProcessingPosition(index=2))
+    configuration = _market_configuration(instrument=instrument)
+    process_canonical_event(
+        state,
+        first,
+        position=ProcessingPosition(index=1),
+        configuration=configuration,
+    )
+    process_canonical_event(
+        state,
+        older_local_second,
+        position=ProcessingPosition(index=2),
+        configuration=configuration,
+    )
 
     market = state.market[instrument]
     assert state._last_processing_position_index == 2
@@ -157,8 +192,19 @@ def test_target_positioned_market_lower_exchange_timestamp_still_advances_state(
         best_ask=81.0,
     )
 
-    process_canonical_event(state, base, position=ProcessingPosition(index=10))
-    process_canonical_event(state, lower_exchange_second, position=ProcessingPosition(index=11))
+    configuration = _market_configuration(instrument=instrument)
+    process_canonical_event(
+        state,
+        base,
+        position=ProcessingPosition(index=10),
+        configuration=configuration,
+    )
+    process_canonical_event(
+        state,
+        lower_exchange_second,
+        position=ProcessingPosition(index=11),
+        configuration=configuration,
+    )
 
     market = state.market[instrument]
     assert state._last_processing_position_index == 11

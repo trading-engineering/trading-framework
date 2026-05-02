@@ -6,6 +6,7 @@ import copy
 
 import pytest
 
+from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.event_model import is_canonical_stream_candidate_type
 from trading_framework.core.domain.processing import process_canonical_event
 from trading_framework.core.domain.processing_order import ProcessingPosition
@@ -110,6 +111,29 @@ def _order_state_event(*, instrument: str, client_order_id: str, ts_ns_local: in
     )
 
 
+def _market_configuration(
+    *,
+    instrument: str = "BTC-USDC-PERP",
+    tick_size: float = 0.1,
+    lot_size: float = 0.01,
+    contract_size: float = 1.0,
+) -> CoreConfiguration:
+    return CoreConfiguration(
+        version="v1",
+        payload={
+            "market": {
+                "instruments": {
+                    instrument: {
+                        "tick_size": tick_size,
+                        "lot_size": lot_size,
+                        "contract_size": contract_size,
+                    }
+                }
+            }
+        },
+    )
+
+
 def test_process_canonical_event_accepts_market_event() -> None:
     state = StrategyState(event_bus=NullEventBus())
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
@@ -131,7 +155,7 @@ def test_process_canonical_event_accepts_market_event_with_processing_position()
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
     position = ProcessingPosition(index=5)
 
-    process_canonical_event(state, event, position=position)
+    process_canonical_event(state, event, position=position, configuration=_market_configuration())
 
     market = state.market["BTC-USDC-PERP"]
     assert market.last_ts_ns_local == 100
@@ -184,7 +208,12 @@ def test_first_positioned_event_is_accepted() -> None:
     state = StrategyState(event_bus=NullEventBus())
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
 
-    process_canonical_event(state, event, position=ProcessingPosition(index=0))
+    process_canonical_event(
+        state,
+        event,
+        position=ProcessingPosition(index=0),
+        configuration=_market_configuration(),
+    )
 
     assert state._last_processing_position_index == 0
 
@@ -199,7 +228,12 @@ def test_increasing_positions_are_accepted() -> None:
         ts_ns_exch=91,
     )
 
-    process_canonical_event(state, first, position=ProcessingPosition(index=10))
+    process_canonical_event(
+        state,
+        first,
+        position=ProcessingPosition(index=10),
+        configuration=_market_configuration(),
+    )
     process_canonical_event(state, second, position=ProcessingPosition(index=11))
 
     assert state._last_processing_position_index == 11
@@ -215,7 +249,12 @@ def test_repeated_position_is_rejected_without_state_mutation() -> None:
         ts_ns_exch=91,
     )
 
-    process_canonical_event(state, accepted, position=ProcessingPosition(index=3))
+    process_canonical_event(
+        state,
+        accepted,
+        position=ProcessingPosition(index=3),
+        configuration=_market_configuration(),
+    )
     before = _state_subset_snapshot(state)
 
     with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
@@ -236,7 +275,12 @@ def test_regressing_position_is_rejected_without_state_mutation() -> None:
         ts_ns_exch=92,
     )
 
-    process_canonical_event(state, accepted, position=ProcessingPosition(index=8))
+    process_canonical_event(
+        state,
+        accepted,
+        position=ProcessingPosition(index=8),
+        configuration=_market_configuration(),
+    )
     before = _state_subset_snapshot(state)
 
     with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
@@ -270,7 +314,7 @@ def test_processing_position_is_not_derived_from_event_time() -> None:
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=1_000_000, ts_ns_exch=900_000)
     position = ProcessingPosition(index=1)
 
-    process_canonical_event(state, event, position=position)
+    process_canonical_event(state, event, position=position, configuration=_market_configuration())
 
     market = state.market["BTC-USDC-PERP"]
     assert market.last_ts_ns_local == event.ts_ns_local
@@ -282,8 +326,9 @@ def test_event_time_out_of_order_but_position_increasing_is_accepted_at_boundary
     first = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=200, ts_ns_exch=190)
     second = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=95)
 
-    process_canonical_event(state, first, position=ProcessingPosition(index=1))
-    process_canonical_event(state, second, position=ProcessingPosition(index=2))
+    configuration = _market_configuration()
+    process_canonical_event(state, first, position=ProcessingPosition(index=1), configuration=configuration)
+    process_canonical_event(state, second, position=ProcessingPosition(index=2), configuration=configuration)
 
     assert state._last_processing_position_index == 2
     # Positioned canonical market events are now ProcessingPosition-driven.
@@ -302,7 +347,12 @@ def test_position_out_of_order_but_event_time_increasing_is_rejected_at_boundary
         ts_ns_exch=180,
     )
 
-    process_canonical_event(state, first, position=ProcessingPosition(index=5))
+    process_canonical_event(
+        state,
+        first,
+        position=ProcessingPosition(index=5),
+        configuration=_market_configuration(),
+    )
     before = _state_subset_snapshot(state)
 
     with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
@@ -373,13 +423,24 @@ def test_interleaved_positioned_and_unpositioned_processing_preserves_cursor_mon
         cum_filled_qty=0.50,
     )
 
-    process_canonical_event(state, positioned_10, position=ProcessingPosition(index=10))
+    configuration = _market_configuration()
+    process_canonical_event(
+        state,
+        positioned_10,
+        position=ProcessingPosition(index=10),
+        configuration=configuration,
+    )
     assert state._last_processing_position_index == 10
 
     process_canonical_event(state, unpositioned, position=None)
     assert state._last_processing_position_index == 10
 
-    process_canonical_event(state, positioned_11, position=ProcessingPosition(index=11))
+    process_canonical_event(
+        state,
+        positioned_11,
+        position=ProcessingPosition(index=11),
+        configuration=configuration,
+    )
     assert state._last_processing_position_index == 11
 
     with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
@@ -414,8 +475,14 @@ def test_positioned_market_tiebreak_no_longer_gates_positioned_market_updates() 
         best_ask=121.0,
     )
 
-    process_canonical_event(state, base, position=ProcessingPosition(index=30))
-    process_canonical_event(state, lower_exch, position=ProcessingPosition(index=31))
+    configuration = _market_configuration()
+    process_canonical_event(state, base, position=ProcessingPosition(index=30), configuration=configuration)
+    process_canonical_event(
+        state,
+        lower_exch,
+        position=ProcessingPosition(index=31),
+        configuration=configuration,
+    )
 
     market = state.market["BTC-USDC-PERP"]
     assert state._last_processing_position_index == 31
@@ -424,7 +491,12 @@ def test_positioned_market_tiebreak_no_longer_gates_positioned_market_updates() 
     assert market.best_bid == 80.0
     assert market.best_ask == 81.0
 
-    process_canonical_event(state, higher_exch, position=ProcessingPosition(index=32))
+    process_canonical_event(
+        state,
+        higher_exch,
+        position=ProcessingPosition(index=32),
+        configuration=configuration,
+    )
 
     market_after_higher = state.market["BTC-USDC-PERP"]
     assert state._last_processing_position_index == 32
