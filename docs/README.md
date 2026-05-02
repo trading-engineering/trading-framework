@@ -25,6 +25,10 @@ semantics.
   Implemented-transition boundary contract for dispatch-time canonical
   order-entry semantics and coexistence constraints around `Submitted` authority.
 
+- **[boundary/planned]** [Control-Time Event Contract v1](control-time-event-contract-v1.md)  
+  Planned boundary contract freezing canonical Control-Time Event realization
+  semantics before model/taxonomy/runtime injection implementation.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
