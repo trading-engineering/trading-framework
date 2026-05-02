@@ -14,6 +14,8 @@ This module is intentionally small:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from trading_framework.core.domain.event_model import (
     CanonicalEventCategory,
     canonical_category_for_type,
@@ -130,3 +132,22 @@ def process_event_entry(
     """
     _ = configuration
     process_canonical_event(state, entry.event, position=entry.position)
+
+
+def fold_event_stream_entries(
+    state: StrategyState,
+    entries: Iterable[EventStreamEntry],
+    *,
+    configuration: object | None = None,
+) -> StrategyState:
+    """Fold ordered EventStreamEntry values into the provided state.
+
+    This utility is intentionally minimal and deterministic:
+    - entries are applied in caller-provided order;
+    - each entry is processed through ``process_event_entry``;
+    - errors from canonical/ordering validation are propagated unchanged;
+    - the same state instance is returned for ergonomic chaining.
+    """
+    for entry in entries:
+        process_event_entry(state, entry, configuration=configuration)
+    return state
