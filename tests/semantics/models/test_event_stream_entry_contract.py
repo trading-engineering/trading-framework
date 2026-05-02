@@ -6,6 +6,7 @@ import copy
 
 import pytest
 
+from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.event_model import is_canonical_stream_candidate_type
 from trading_framework.core.domain.processing import process_event_entry
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
@@ -200,16 +201,26 @@ def test_process_event_entry_enforces_processing_position_monotonicity() -> None
 def test_configuration_parameter_is_explicit_but_not_consumed_yet() -> None:
     event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
     entry = EventStreamEntry(position=ProcessingPosition(index=0), event=event)
+    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
 
     state_without_config = StrategyState(event_bus=NullEventBus())
     state_with_config = StrategyState(event_bus=NullEventBus())
 
     process_event_entry(state_without_config, entry)
-    process_event_entry(state_with_config, entry, configuration={"version": "v1"})
+    process_event_entry(state_with_config, entry, configuration=configuration)
 
     assert _state_subset_snapshot(state_with_config) == _state_subset_snapshot(
         state_without_config
     )
+
+
+def test_process_event_entry_rejects_non_core_configuration() -> None:
+    event = _book_market_event(instrument="BTC-USDC-PERP", ts_ns_local=100, ts_ns_exch=90)
+    entry = EventStreamEntry(position=ProcessingPosition(index=0), event=event)
+    state = StrategyState(event_bus=NullEventBus())
+
+    with pytest.raises(TypeError, match="configuration must be CoreConfiguration or None"):
+        process_event_entry(state, entry, configuration={"version": "v1"})
 
 
 def test_event_bus_remains_non_canonical_event_stream_input() -> None:

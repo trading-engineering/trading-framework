@@ -6,6 +6,7 @@ import copy
 
 import pytest
 
+from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.processing import fold_event_stream_entries
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
@@ -133,7 +134,7 @@ def test_fold_same_entries_same_configuration_produces_equivalent_final_state() 
             ),
         ),
     ]
-    configuration = {"version": "v1"}
+    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -177,7 +178,7 @@ def test_fold_same_prefix_produces_equivalent_prefix_state() -> None:
             ),
         ),
     ]
-    configuration = {"version": "v1"}
+    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
 
     left = StrategyState(event_bus=NullEventBus())
     right = StrategyState(event_bus=NullEventBus())
@@ -352,6 +353,63 @@ def test_fold_returns_same_state_object_for_ergonomics() -> None:
         )
     ]
 
-    returned = fold_event_stream_entries(state, entries, configuration={"version": "v1"})
+    configuration = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
+    returned = fold_event_stream_entries(state, entries, configuration=configuration)
 
     assert returned is state
+
+
+def test_fold_rejects_non_core_configuration() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    entries = [
+        _entry(
+            0,
+            _book_market_event(
+                instrument="BTC-USDC-PERP",
+                ts_ns_local=200,
+                ts_ns_exch=190,
+                best_bid=100.0,
+                best_ask=101.0,
+            ),
+        )
+    ]
+
+    with pytest.raises(TypeError, match="configuration must be CoreConfiguration or None"):
+        fold_event_stream_entries(state, entries, configuration={"version": "v1"})
+
+
+def test_fold_different_configuration_values_currently_produce_same_state_transitionally() -> None:
+    entries = [
+        _entry(
+            0,
+            _book_market_event(
+                instrument="BTC-USDC-PERP",
+                ts_ns_local=200,
+                ts_ns_exch=190,
+                best_bid=100.0,
+                best_ask=101.0,
+            ),
+        ),
+        _entry(
+            1,
+            _fill_event(
+                instrument="BTC-USDC-PERP",
+                client_order_id="order-1",
+                ts_ns_local=201,
+                ts_ns_exch=191,
+                cum_filled_qty=0.25,
+            ),
+        ),
+    ]
+    configuration_a = CoreConfiguration(version="v1", payload={"risk_mode": "strict"})
+    configuration_b = CoreConfiguration(version="v2", payload={"risk_mode": "lenient"})
+
+    left = StrategyState(event_bus=NullEventBus())
+    right = StrategyState(event_bus=NullEventBus())
+
+    fold_event_stream_entries(left, entries, configuration=configuration_a)
+    fold_event_stream_entries(right, entries, configuration=configuration_b)
+
+    # Transitional contract: configuration is explicit and validated at boundary,
+    # but current reducers do not consume it yet.
+    assert _state_subset_snapshot(left) == _state_subset_snapshot(right)

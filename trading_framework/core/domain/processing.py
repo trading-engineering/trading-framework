@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.event_model import (
     CanonicalEventCategory,
     canonical_category_for_type,
@@ -116,7 +117,7 @@ def process_event_entry(
     state: StrategyState,
     entry: EventStreamEntry,
     *,
-    configuration: object | None = None,
+    configuration: CoreConfiguration | None = None,
 ) -> None:
     """Process one minimal EventStreamEntry via the canonical boundary.
 
@@ -130,7 +131,8 @@ def process_event_entry(
     Ordering is enforced through ``entry.position`` using existing
     ``ProcessingPosition`` cursor monotonicity logic in canonical processing.
     """
-    _ = configuration
+    if configuration is not None and not isinstance(configuration, CoreConfiguration):
+        raise TypeError("configuration must be CoreConfiguration or None")
     process_canonical_event(state, entry.event, position=entry.position)
 
 
@@ -138,7 +140,7 @@ def fold_event_stream_entries(
     state: StrategyState,
     entries: Iterable[EventStreamEntry],
     *,
-    configuration: object | None = None,
+    configuration: CoreConfiguration | None = None,
 ) -> StrategyState:
     """Fold ordered EventStreamEntry values into the provided state.
 
