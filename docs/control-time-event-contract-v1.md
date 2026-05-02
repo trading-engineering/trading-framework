@@ -4,12 +4,12 @@
 
 ## Purpose and scope
 
-This document defines an implementation-facing boundary contract for a future
-canonical Control-Time Event boundary across `core` and runtime.
+This document defines an implementation-facing boundary contract snapshot for
+the Control-Time Event transition boundary across `core` and runtime after
+initial model/taxonomy/boundary/runtime injection slices.
 
-This is a docs-contract slice only:
+This is a docs-contract reconciliation slice only:
 
-- it does not implement a `ControlTimeEvent` class;
 - it does not change runtime wakeup behavior;
 - it does not modify `ExecutionControl` behavior;
 - it does not modify queue/rate/inflight behavior;
@@ -28,8 +28,8 @@ for future Control-Time Event canonicalization boundaries. It does not redefine
 architecture semantics.
 
 `CTEC-03` - Existing `core` implementation snapshot semantics remain governed by
-[Core Stable Contract v1](core-stable-contract-v1.md). This contract is
-planning-oriented and introduces no runtime or reducer behavior changes.
+[Core Stable Contract v1](core-stable-contract-v1.md). This contract records
+the current implemented transition slice and what remains deferred.
 
 Normative semantic sources:
 
@@ -53,6 +53,13 @@ scheduling surface in this contract snapshot.
 realizes a previously derived control scheduling obligation and injects the
 event into the Event Stream boundary.
 
+`CTEC-06a` - Current implemented transition slice includes:
+
+- `ControlTimeEvent` model in `core` domain types;
+- taxonomy mapping as canonical `CONTROL` category candidate;
+- canonical boundary acceptance via `process_event_entry` / `process_canonical_event`;
+- `StrategyState.apply_control_time_event` as a no-op reducer for this slice.
+
 `CTEC-07` - `EventBus` remains non-canonical transport/integration
 infrastructure and is not a canonical Event Stream record.
 
@@ -74,6 +81,11 @@ or simulation time passes without a derived obligation boundary.
 
 `CTEC-12` - `ExecutionControl` does not emit canonical Control-Time Events
 directly in this contract snapshot.
+
+`CTEC-12a` - In the current HFT runtime transition slice, injection occurs only
+when a scheduled deadline is realized (`next_send_ts_ns_local` is present and
+runtime local time has reached/passed that deadline), and injection is ordered
+after queued-intent pop and before the gate path.
 
 ---
 
@@ -130,8 +142,8 @@ ProcessingPosition sequence shared with other canonical candidates, including
 `CTEC-24` - Future Control-Time Event processing should allow deterministic
 queue/rate/inflight derived processing to run at the canonical event boundary.
 
-`CTEC-25` - This contract does not implement reducer semantics for Control-Time
-Event behavior.
+`CTEC-25` - Current implemented reducer semantics are intentionally no-op for
+ControlTimeEvent in this transition slice.
 
 `CTEC-26` - Queue Processing remains deterministic event processing, not
 independent wall-clock mutation.
@@ -150,6 +162,9 @@ contract snapshot.
 compatibility wakeup surfaces and canonical Control-Time Event stream authority.
 
 `CTEC-30` - `GateDecision` shape remains unchanged in this contract snapshot.
+
+`CTEC-30a` - Current runtime uses one global canonical ProcessingPosition
+counter shared by `MarketEvent`, `OrderSubmittedEvent`, and `ControlTimeEvent`.
 
 ---
 
@@ -170,11 +185,14 @@ future strict-mode canonical behavior.
 
 ## Explicitly out of scope
 
-`CTEC-36` - `ControlTimeEvent` class implementation.
+`CTEC-36` - Additional ControlTimeEvent model shape expansion beyond the current
+implemented contract fields.
 
-`CTEC-37` - Event taxonomy code changes.
+`CTEC-37` - Further event taxonomy semantic changes beyond current
+`ControlTimeEvent` canonical `CONTROL` mapping.
 
-`CTEC-38` - Runtime injection wiring implementation.
+`CTEC-38` - Runtime injection generalization beyond current scheduled-deadline
+realization transition behavior.
 
 `CTEC-39` - Queue/rate reducer migration.
 

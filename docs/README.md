@@ -25,9 +25,9 @@ semantics.
   Implemented-transition boundary contract for dispatch-time canonical
   order-entry semantics and coexistence constraints around `Submitted` authority.
 
-- **[boundary/planned]** [Control-Time Event Contract v1](control-time-event-contract-v1.md)  
-  Planned boundary contract freezing canonical Control-Time Event realization
-  semantics before model/taxonomy/runtime injection implementation.
+- **[boundary/implemented-transition]** [Control-Time Event Contract v1](control-time-event-contract-v1.md)  
+  Implemented-transition boundary contract for canonical Control-Time Event
+  realization semantics and coexistence constraints with compatibility wakeups.
 
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
@@ -36,7 +36,8 @@ semantics.
 ## Deferred / not implemented here
 
 - Runtime mapping implementation details.
-- Introduction of new canonical event types.
-- Control-Time Event injection mechanism/realization behavior.
+- Queue/rate reducer migration and full control-time authority migration.
+- FillEvent runtime ingress and source authority rollout.
+- Post-submission execution feedback canonicalization.
 - `OrderStateEvent` canonicalization.
-- Full replay/storage/runtime integration.
+- Replay/storage/`ProcessingContext`/`EventStreamCursor` and full runtime stream integration.
