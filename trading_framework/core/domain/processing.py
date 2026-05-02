@@ -19,7 +19,7 @@ from trading_framework.core.domain.event_model import (
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
 )
-from trading_framework.core.domain.processing_order import ProcessingPosition
+from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import FillEvent, MarketEvent
 
@@ -108,3 +108,25 @@ def process_canonical_event(
         "Unsupported canonical event candidate for this processing boundary: "
         f"{record_type.__name__}"
     )
+
+
+def process_event_entry(
+    state: StrategyState,
+    entry: EventStreamEntry,
+    *,
+    configuration: object | None = None,
+) -> None:
+    """Process one minimal EventStreamEntry via the canonical boundary.
+
+    This wrapper is intentionally minimal:
+    - it is not full Event Stream storage;
+    - it is not replay orchestration;
+    - it is not runtime integration.
+
+    Configuration is accepted as explicit processing input to reflect the
+    docs contract, but current minimal reducers do not consume it yet.
+    Ordering is enforced through ``entry.position`` using existing
+    ``ProcessingPosition`` cursor monotonicity logic in canonical processing.
+    """
+    _ = configuration
+    process_canonical_event(state, entry.event, position=entry.position)
