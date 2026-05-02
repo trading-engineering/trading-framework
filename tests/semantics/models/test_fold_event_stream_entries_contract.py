@@ -11,9 +11,11 @@ from trading_framework.core.domain.processing import fold_event_stream_entries
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
+    ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
+    OrderSubmittedEvent,
     Price,
     Quantity,
 )
@@ -75,6 +77,44 @@ def _fill_event(
         time_in_force="GTC",
         liquidity_flag="maker",
         fee=None,
+    )
+
+
+def _order_submitted_event(
+    *,
+    instrument: str,
+    client_order_id: str,
+    ts_ns_local_dispatch: int,
+) -> OrderSubmittedEvent:
+    return OrderSubmittedEvent(
+        ts_ns_local_dispatch=ts_ns_local_dispatch,
+        instrument=instrument,
+        client_order_id=client_order_id,
+        side="buy",
+        order_type="limit",
+        intended_price=Price(currency="USDC", value=100.0),
+        intended_qty=Quantity(unit="contracts", value=1.0),
+        time_in_force="GTC",
+        intent_correlation_id="corr-1",
+        dispatch_attempt_id="attempt-1",
+        runtime_correlation={"engine": "backtest", "seq": 1},
+    )
+
+
+def _control_time_event(
+    *,
+    ts_ns_local_control: int,
+    due_ts_ns_local: int | None = None,
+    realized_ts_ns_local: int | None = None,
+) -> ControlTimeEvent:
+    return ControlTimeEvent(
+        ts_ns_local_control=ts_ns_local_control,
+        reason="rate_limit_recheck",
+        due_ts_ns_local=due_ts_ns_local,
+        realized_ts_ns_local=realized_ts_ns_local,
+        obligation_reason="rate_limit",
+        obligation_due_ts_ns_local=due_ts_ns_local,
+        runtime_correlation={"engine": "backtest", "seq": 1},
     )
 
 
@@ -339,6 +379,43 @@ def test_fold_positioned_market_ordering_follows_processing_position_not_event_t
     assert market.last_ts_ns_local == 100
     assert market.last_ts_ns_exch == 95
     assert state._last_processing_position_index == 2
+
+
+def test_fold_interleaved_market_submitted_control_uses_single_global_cursor() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    entries = [
+        _entry(
+            0,
+            _book_market_event(
+                instrument="BTC-USDC-PERP",
+                ts_ns_local=200,
+                ts_ns_exch=190,
+                best_bid=100.0,
+                best_ask=101.0,
+            ),
+        ),
+        _entry(
+            1,
+            _order_submitted_event(
+                instrument="BTC-USDC-PERP",
+                client_order_id="order-submitted-1",
+                ts_ns_local_dispatch=205,
+            ),
+        ),
+        _entry(
+            2,
+            _control_time_event(
+                ts_ns_local_control=206,
+                due_ts_ns_local=210,
+            ),
+        ),
+    ]
+
+    fold_event_stream_entries(state, entries, configuration=_market_configuration())
+
+    assert state._last_processing_position_index == 2
+    projection = state.canonical_orders[("BTC-USDC-PERP", "order-submitted-1")]
+    assert projection.state == "submitted"
 
 
 def test_fold_fill_event_cumulative_idempotence_remains_unchanged() -> None:

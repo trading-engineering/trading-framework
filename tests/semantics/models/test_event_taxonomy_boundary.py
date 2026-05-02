@@ -14,6 +14,7 @@ from trading_framework.core.domain.event_model import (
 from trading_framework.core.domain.processing import process_canonical_event
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
+    ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
@@ -57,6 +58,9 @@ def test_canonical_stream_candidate_classification_current_slice() -> None:
         canonical_category_for_type(OrderSubmittedEvent)
         == CanonicalEventCategory.INTENT_RELATED
     )
+
+    assert is_canonical_stream_candidate_type(ControlTimeEvent) is True
+    assert canonical_category_for_type(ControlTimeEvent) == CanonicalEventCategory.CONTROL
 
     # Compatibility execution feedback remains non-canonical in this slice.
     assert is_canonical_stream_candidate_type(OrderStateEvent) is False

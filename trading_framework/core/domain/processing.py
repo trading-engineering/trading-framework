@@ -25,7 +25,12 @@ from trading_framework.core.domain.event_model import (
 )
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import FillEvent, MarketEvent, OrderSubmittedEvent
+from trading_framework.core.domain.types import (
+    ControlTimeEvent,
+    FillEvent,
+    MarketEvent,
+    OrderSubmittedEvent,
+)
 
 
 def _extract_required_positive_number(value: object, *, field_path: str) -> float:
@@ -105,6 +110,7 @@ def process_canonical_event(
     - ``MarketEvent`` (category: ``market``)
     - ``OrderSubmittedEvent`` (category: ``intent_related``)
     - ``FillEvent`` (category: ``execution``)
+    - ``ControlTimeEvent`` (category: ``control``)
 
     ``ProcessingPosition`` is accepted as Processing Order metadata at this
     boundary. When provided, positions must be strictly increasing. This
@@ -180,6 +186,12 @@ def process_canonical_event(
         if position is not None:
             state._advance_processing_position(position)
         state.apply_order_submitted_event(event)
+        return
+
+    if category == CanonicalEventCategory.CONTROL and isinstance(event, ControlTimeEvent):
+        if position is not None:
+            state._advance_processing_position(position)
+        state.apply_control_time_event(event)
         return
 
     raise TypeError(

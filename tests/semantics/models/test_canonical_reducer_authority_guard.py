@@ -11,6 +11,7 @@ _TARGET_METHODS = frozenset(
         "update_market",
         "apply_fill_event",
         "apply_order_submitted_event",
+        "apply_control_time_event",
     }
 )
 

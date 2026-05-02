@@ -35,6 +35,7 @@ from trading_framework.core.events.events import (
 
 if TYPE_CHECKING:
     from trading_framework.core.domain.types import (
+        ControlTimeEvent,
         FillEvent,
         NewOrderIntent,
         OrderIntent,
@@ -286,6 +287,15 @@ class StrategyState:
         # Idempotent submitted-entry behavior:
         # - If already submitted, keep existing projection unchanged.
         # - If already beyond submitted, do not regress lifecycle state.
+        return
+
+    def apply_control_time_event(self, event: ControlTimeEvent) -> None:
+        """Reduce canonical control-time event at boundary without state mutation.
+
+        This first core-only slice intentionally keeps ControlTimeEvent reduction
+        as a no-op for queue/rate/inflight and compatibility projections.
+        """
+        _ = event
         return
 
     def _clear_inflight(self, instrument: str, client_order_id: str) -> None:

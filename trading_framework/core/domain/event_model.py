@@ -13,6 +13,7 @@ from __future__ import annotations
 from enum import Enum
 
 from trading_framework.core.domain.types import (
+    ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
@@ -49,6 +50,7 @@ CANONICAL_STREAM_CANDIDATE_CATEGORY_BY_TYPE: dict[type[object], CanonicalEventCa
     MarketEvent: CanonicalEventCategory.MARKET,
     OrderSubmittedEvent: CanonicalEventCategory.INTENT_RELATED,
     FillEvent: CanonicalEventCategory.EXECUTION,
+    ControlTimeEvent: CanonicalEventCategory.CONTROL,
 }
 
 

@@ -12,6 +12,7 @@ from trading_framework.core.domain.processing import process_canonical_event
 from trading_framework.core.domain.processing_order import ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
+    ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
@@ -140,6 +141,24 @@ def _order_submitted_event(
     )
 
 
+def _control_time_event(
+    *,
+    ts_ns_local_control: int,
+    reason: str = "rate_limit_recheck",
+    due_ts_ns_local: int | None = None,
+    realized_ts_ns_local: int | None = None,
+) -> ControlTimeEvent:
+    return ControlTimeEvent(
+        ts_ns_local_control=ts_ns_local_control,
+        reason=reason,
+        due_ts_ns_local=due_ts_ns_local,
+        realized_ts_ns_local=realized_ts_ns_local,
+        obligation_reason="rate_limit",
+        obligation_due_ts_ns_local=due_ts_ns_local,
+        runtime_correlation={"engine": "backtest", "seq": 1},
+    )
+
+
 def _market_configuration(
     *,
     instrument: str = "BTC-USDC-PERP",
@@ -161,6 +180,18 @@ def _market_configuration(
             }
         },
     )
+
+
+def _control_state_snapshot(state: StrategyState) -> dict[str, object]:
+    return {
+        "queued_intents": copy.deepcopy(state.queued_intents),
+        "inflight": copy.deepcopy(state.inflight),
+        "orders": copy.deepcopy(state.orders),
+        "canonical_orders": copy.deepcopy(state.canonical_orders),
+        "fills": copy.deepcopy(state.fills),
+        "market": copy.deepcopy(state.market),
+        "account": copy.deepcopy(state.account),
+    }
 
 
 def test_process_canonical_event_accepts_market_event() -> None:
@@ -264,6 +295,69 @@ def test_process_canonical_event_accepts_order_submitted_event_with_processing_p
     assert projection.submitted_ts_ns_local == 300
     assert projection.updated_ts_ns_local == 300
     assert state._last_processing_position_index == 13
+
+
+def test_control_time_event_requires_due_or_realized_timestamp() -> None:
+    with pytest.raises(
+        ValueError,
+        match="at least one of due_ts_ns_local or realized_ts_ns_local is required",
+    ):
+        _control_time_event(ts_ns_local_control=500)
+
+
+def test_control_time_event_rejects_extra_fields() -> None:
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        ControlTimeEvent(
+            ts_ns_local_control=501,
+            reason="rate_limit_recheck",
+            due_ts_ns_local=600,
+            extra_field="unexpected",
+        )
+
+
+def test_process_canonical_event_accepts_control_time_event_with_processing_position() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _control_time_event(
+        ts_ns_local_control=510,
+        due_ts_ns_local=520,
+    )
+
+    process_canonical_event(state, event, position=ProcessingPosition(index=14))
+
+    assert state._last_processing_position_index == 14
+
+
+def test_process_canonical_event_control_time_event_does_not_mutate_state_buckets() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _control_time_event(
+        ts_ns_local_control=530,
+        realized_ts_ns_local=531,
+    )
+    before = _control_state_snapshot(state)
+
+    process_canonical_event(state, event, position=ProcessingPosition(index=15))
+
+    after = _control_state_snapshot(state)
+    assert after == before
+    assert state._last_processing_position_index == 15
+
+
+def test_control_time_event_still_obeys_global_processing_position_monotonicity() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    first = _control_time_event(
+        ts_ns_local_control=540,
+        due_ts_ns_local=550,
+    )
+    repeated = _control_time_event(
+        ts_ns_local_control=541,
+        due_ts_ns_local=551,
+    )
+
+    process_canonical_event(state, first, position=ProcessingPosition(index=16))
+    with pytest.raises(ValueError, match="Non-monotonic ProcessingPosition index"):
+        process_canonical_event(state, repeated, position=ProcessingPosition(index=16))
+
+    assert state._last_processing_position_index == 16
 
 
 def test_first_positioned_event_is_accepted() -> None:

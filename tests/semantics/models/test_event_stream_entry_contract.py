@@ -14,6 +14,7 @@ from trading_framework.core.domain.processing import fold_event_stream_entries, 
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
+    ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
@@ -117,6 +118,23 @@ def _order_submitted_event(
     )
 
 
+def _control_time_event(
+    *,
+    ts_ns_local_control: int,
+    due_ts_ns_local: int | None = None,
+    realized_ts_ns_local: int | None = None,
+) -> ControlTimeEvent:
+    return ControlTimeEvent(
+        ts_ns_local_control=ts_ns_local_control,
+        reason="rate_limit_recheck",
+        due_ts_ns_local=due_ts_ns_local,
+        realized_ts_ns_local=realized_ts_ns_local,
+        obligation_reason="rate_limit",
+        obligation_due_ts_ns_local=due_ts_ns_local,
+        runtime_correlation={"engine": "backtest", "seq": 1},
+    )
+
+
 def _state_subset_snapshot(state: StrategyState) -> dict[str, object]:
     return {
         "market": copy.deepcopy(state.market),
@@ -216,6 +234,38 @@ def test_process_event_entry_processes_order_submitted_and_updates_projection() 
     assert projection.state == "submitted"
     assert projection.submitted_ts_ns_local == 250
     assert projection.updated_ts_ns_local == 250
+
+
+def test_process_event_entry_processes_control_time_event_and_advances_cursor() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _control_time_event(
+        ts_ns_local_control=260,
+        due_ts_ns_local=300,
+    )
+    entry = EventStreamEntry(position=ProcessingPosition(index=7), event=event)
+    before = {
+        "queued_intents": copy.deepcopy(state.queued_intents),
+        "inflight": copy.deepcopy(state.inflight),
+        "orders": copy.deepcopy(state.orders),
+        "canonical_orders": copy.deepcopy(state.canonical_orders),
+        "fills": copy.deepcopy(state.fills),
+        "market": copy.deepcopy(state.market),
+        "account": copy.deepcopy(state.account),
+    }
+
+    process_event_entry(state, entry)
+
+    after = {
+        "queued_intents": copy.deepcopy(state.queued_intents),
+        "inflight": copy.deepcopy(state.inflight),
+        "orders": copy.deepcopy(state.orders),
+        "canonical_orders": copy.deepcopy(state.canonical_orders),
+        "fills": copy.deepcopy(state.fills),
+        "market": copy.deepcopy(state.market),
+        "account": copy.deepcopy(state.account),
+    }
+    assert state._last_processing_position_index == 7
+    assert after == before
 
 
 def test_process_event_entry_rejects_non_canonical_payload() -> None:

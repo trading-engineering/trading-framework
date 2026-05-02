@@ -362,6 +362,33 @@ class OrderSubmittedEvent(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# ControlTimeEvent model (runtime-realized control-time canonical event)
+# ---------------------------------------------------------------------------
+
+
+class ControlTimeEvent(BaseModel):
+    ts_ns_local_control: int = Field(..., gt=0)
+    reason: str = Field(..., min_length=1)
+
+    due_ts_ns_local: int | None = Field(default=None, gt=0)
+    realized_ts_ns_local: int | None = Field(default=None, gt=0)
+
+    obligation_reason: str | None = Field(default=None, min_length=1)
+    obligation_due_ts_ns_local: int | None = Field(default=None, gt=0)
+    runtime_correlation: dict[str, str | int | float | bool | None] | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_due_or_realized_present(self) -> ControlTimeEvent:
+        if self.due_ts_ns_local is None and self.realized_ts_ns_local is None:
+            raise ValueError(
+                "at least one of due_ts_ns_local or realized_ts_ns_local is required"
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
 # OrderStateEvent model (snapshot event)
 # ---------------------------------------------------------------------------
 
