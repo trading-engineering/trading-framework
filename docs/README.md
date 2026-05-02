@@ -1,0 +1,29 @@
+# Core Docs Contract Index v1
+
+This directory contains implementation-facing contracts and snapshots for `core`.
+
+The main `docs` repository remains the semantic source of truth for architecture
+and terminology. Documents in `core/docs` must not contradict main docs
+semantics.
+
+## Current documents
+
+- **[stable]** [Core Stable Contract v1](core-stable-contract-v1.md)  
+  Stable snapshot of currently implemented and tested `core` v1 semantic
+  guarantees and boundaries.
+
+- **[boundary]** [Runtime-to-CoreConfiguration Contract Boundary v1](runtime-to-coreconfiguration-contract-v1.md)  
+  Boundary contract draft for runtime-owned mapping into `CoreConfiguration`
+  before calling `core` canonical processing APIs.
+
+- **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
+  Historical closure contract for positioned canonical `MarketEvent`
+  configuration-path and validation behavior in `core`.
+
+## Deferred / not implemented here
+
+- Runtime mapping implementation details.
+- Introduction of new canonical event types.
+- Control-Time Event injection mechanism/realization behavior.
+- `OrderStateEvent` canonicalization.
+- Full replay/storage/runtime integration.
