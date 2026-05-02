@@ -145,6 +145,49 @@ def test_fold_same_entries_same_configuration_produces_equivalent_final_state() 
     assert _state_subset_snapshot(left) == _state_subset_snapshot(right)
 
 
+def test_fold_uses_single_explicit_configuration_input_with_stable_identity() -> None:
+    """Phase 2B guardrail: one fold call has one explicit CoreConfiguration input."""
+    entries = [
+        _entry(
+            0,
+            _book_market_event(
+                instrument="BTC-USDC-PERP",
+                ts_ns_local=200,
+                ts_ns_exch=190,
+                best_bid=100.0,
+                best_ask=101.0,
+            ),
+        ),
+        _entry(
+            1,
+            _fill_event(
+                instrument="BTC-USDC-PERP",
+                client_order_id="order-1",
+                ts_ns_local=201,
+                ts_ns_exch=191,
+                cum_filled_qty=0.25,
+            ),
+        ),
+    ]
+    cfg_v1_left = CoreConfiguration(
+        version="v1",
+        payload={"risk_mode": "strict", "limits": {"max_open_orders": 4}},
+    )
+    cfg_v1_right = CoreConfiguration(
+        version="v1",
+        payload={"limits": {"max_open_orders": 4}, "risk_mode": "strict"},
+    )
+
+    left = StrategyState(event_bus=NullEventBus())
+    right = StrategyState(event_bus=NullEventBus())
+
+    fold_event_stream_entries(left, entries, configuration=cfg_v1_left)
+    fold_event_stream_entries(right, entries, configuration=cfg_v1_right)
+
+    assert cfg_v1_left.fingerprint == cfg_v1_right.fingerprint
+    assert _state_subset_snapshot(left) == _state_subset_snapshot(right)
+
+
 def test_fold_same_prefix_produces_equivalent_prefix_state() -> None:
     entries = [
         _entry(
@@ -412,4 +455,55 @@ def test_fold_different_configuration_values_currently_produce_same_state_transi
 
     # Transitional contract: configuration is explicit and validated at boundary,
     # but current reducers do not consume it yet.
+    assert configuration_a.fingerprint != configuration_b.fingerprint
+    assert _state_subset_snapshot(left) == _state_subset_snapshot(right)
+
+
+def test_fold_configuration_identity_stays_stable_after_source_payload_mutation() -> None:
+    """Transitional guardrail: configuration identity remains stable during fold."""
+    entries = [
+        _entry(
+            0,
+            _book_market_event(
+                instrument="BTC-USDC-PERP",
+                ts_ns_local=200,
+                ts_ns_exch=190,
+                best_bid=100.0,
+                best_ask=101.0,
+            ),
+        ),
+        _entry(
+            1,
+            _fill_event(
+                instrument="BTC-USDC-PERP",
+                client_order_id="order-1",
+                ts_ns_local=201,
+                ts_ns_exch=191,
+                cum_filled_qty=0.25,
+            ),
+        ),
+    ]
+    source_payload = {
+        "risk_mode": "strict",
+        "limits": {"max_open_orders": 4},
+        "symbols": ["BTC-USDC-PERP"],
+    }
+    configuration = CoreConfiguration(version="v1", payload=source_payload)
+    fingerprint_before = configuration.fingerprint
+    payload_before = configuration.payload
+
+    source_payload["risk_mode"] = "lenient"
+    source_payload["limits"]["max_open_orders"] = 1
+    source_payload["symbols"].append("ETH-USDC-PERP")
+
+    left = StrategyState(event_bus=NullEventBus())
+    right = StrategyState(event_bus=NullEventBus())
+
+    fold_event_stream_entries(left, entries, configuration=configuration)
+    fold_event_stream_entries(right, entries, configuration=configuration)
+
+    source_payload["limits"]["max_open_orders"] = 99
+
+    assert configuration.fingerprint == fingerprint_before
+    assert configuration.payload == payload_before
     assert _state_subset_snapshot(left) == _state_subset_snapshot(right)

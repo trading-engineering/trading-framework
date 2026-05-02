@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
+import inspect
 
 import pytest
 
 from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.event_model import is_canonical_stream_candidate_type
-from trading_framework.core.domain.processing import process_event_entry
+from trading_framework.core.domain.processing import fold_event_stream_entries, process_event_entry
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
@@ -104,6 +106,21 @@ def _state_subset_snapshot(state: StrategyState) -> dict[str, object]:
 def test_event_stream_entry_requires_processing_position() -> None:
     with pytest.raises(TypeError, match="position must be a ProcessingPosition"):
         EventStreamEntry(position=object(), event={"x": 1})
+
+
+def test_event_stream_entry_contract_has_no_configuration_field() -> None:
+    field_names = {field.name for field in dataclasses.fields(EventStreamEntry)}
+    assert field_names == {"position", "event"}
+    assert "configuration" not in field_names
+
+
+def test_configuration_is_call_level_input_not_entry_level_shape() -> None:
+    process_signature = inspect.signature(process_event_entry)
+    fold_signature = inspect.signature(fold_event_stream_entries)
+
+    assert "configuration" in process_signature.parameters
+    assert "configuration" in fold_signature.parameters
+    assert "configuration" not in {field.name for field in dataclasses.fields(EventStreamEntry)}
 
 
 def test_process_event_entry_processes_market_and_advances_state() -> None:
