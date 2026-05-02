@@ -17,6 +17,7 @@ from trading_framework.core.domain.types import (
     FillEvent,
     MarketEvent,
     OrderStateEvent,
+    OrderSubmittedEvent,
     Price,
     Quantity,
 )
@@ -92,6 +93,27 @@ def _order_state_event(*, instrument: str, client_order_id: str) -> OrderStateEv
         time_in_force="GTC",
         reason=None,
         raw={"req": 0, "source": "snapshot"},
+    )
+
+
+def _order_submitted_event(
+    *,
+    instrument: str,
+    client_order_id: str,
+    ts_ns_local_dispatch: int,
+) -> OrderSubmittedEvent:
+    return OrderSubmittedEvent(
+        ts_ns_local_dispatch=ts_ns_local_dispatch,
+        instrument=instrument,
+        client_order_id=client_order_id,
+        side="buy",
+        order_type="limit",
+        intended_price=Price(currency="USDC", value=100.0),
+        intended_qty=Quantity(unit="contracts", value=1.0),
+        time_in_force="GTC",
+        intent_correlation_id="corr-1",
+        dispatch_attempt_id="attempt-1",
+        runtime_correlation={"engine": "backtest", "seq": 1},
     )
 
 
@@ -176,6 +198,24 @@ def test_process_event_entry_processes_fill_and_updates_fill_state() -> None:
     assert state._last_processing_position_index == 5
     assert len(state.fills["BTC-USDC-PERP"]) == 1
     assert state.fill_cum_qty["BTC-USDC-PERP"]["order-1"] == 0.25
+
+
+def test_process_event_entry_processes_order_submitted_and_updates_projection() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _order_submitted_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-submitted-1",
+        ts_ns_local_dispatch=250,
+    )
+    entry = EventStreamEntry(position=ProcessingPosition(index=6), event=event)
+
+    process_event_entry(state, entry)
+
+    assert state._last_processing_position_index == 6
+    projection = state.canonical_orders[("BTC-USDC-PERP", "order-submitted-1")]
+    assert projection.state == "submitted"
+    assert projection.submitted_ts_ns_local == 250
+    assert projection.updated_ts_ns_local == 250
 
 
 def test_process_event_entry_rejects_non_canonical_payload() -> None:

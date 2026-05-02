@@ -15,6 +15,7 @@ from trading_framework.core.domain.types import (
     FillEvent,
     MarketEvent,
     OrderStateEvent,
+    OrderSubmittedEvent,
     Price,
     Quantity,
 )
@@ -91,14 +92,21 @@ def _fill_event(
     )
 
 
-def _order_state_event(*, instrument: str, client_order_id: str, ts_ns_local: int, ts_ns_exch: int) -> OrderStateEvent:
+def _order_state_event(
+    *,
+    instrument: str,
+    client_order_id: str,
+    ts_ns_local: int,
+    ts_ns_exch: int,
+    state_type: str = "accepted",
+) -> OrderStateEvent:
     return OrderStateEvent(
         ts_ns_local=ts_ns_local,
         ts_ns_exch=ts_ns_exch,
         instrument=instrument,
         client_order_id=client_order_id,
         order_type="limit",
-        state_type="accepted",
+        state_type=state_type,
         side="buy",
         intended_price=Price(currency="USDC", value=100.0),
         filled_price=None,
@@ -108,6 +116,27 @@ def _order_state_event(*, instrument: str, client_order_id: str, ts_ns_local: in
         time_in_force="GTC",
         reason=None,
         raw={"req": 0, "source": "snapshot"},
+    )
+
+
+def _order_submitted_event(
+    *,
+    instrument: str,
+    client_order_id: str,
+    ts_ns_local_dispatch: int,
+) -> OrderSubmittedEvent:
+    return OrderSubmittedEvent(
+        ts_ns_local_dispatch=ts_ns_local_dispatch,
+        instrument=instrument,
+        client_order_id=client_order_id,
+        side="buy",
+        order_type="limit",
+        intended_price=Price(currency="USDC", value=100.0),
+        intended_qty=Quantity(unit="contracts", value=1.0),
+        time_in_force="GTC",
+        intent_correlation_id="corr-1",
+        dispatch_attempt_id="attempt-1",
+        runtime_correlation={"engine": "backtest", "seq": 1},
     )
 
 
@@ -202,6 +231,39 @@ def test_process_canonical_event_accepts_fill_event_with_processing_position() -
     assert fills[0] == event
     assert state.fill_cum_qty["BTC-USDC-PERP"]["order-1"] == 0.25
     assert state._last_processing_position_index == 12
+
+
+def test_process_canonical_event_accepts_order_submitted_event() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _order_submitted_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-submitted-1",
+        ts_ns_local_dispatch=300,
+    )
+
+    process_canonical_event(state, event)
+
+    projection = state.canonical_orders[("BTC-USDC-PERP", "order-submitted-1")]
+    assert projection.state == "submitted"
+    assert projection.submitted_ts_ns_local == 300
+    assert projection.updated_ts_ns_local == 300
+
+
+def test_process_canonical_event_accepts_order_submitted_event_with_processing_position() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _order_submitted_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-submitted-1",
+        ts_ns_local_dispatch=300,
+    )
+
+    process_canonical_event(state, event, position=ProcessingPosition(index=13))
+
+    projection = state.canonical_orders[("BTC-USDC-PERP", "order-submitted-1")]
+    assert projection.state == "submitted"
+    assert projection.submitted_ts_ns_local == 300
+    assert projection.updated_ts_ns_local == 300
+    assert state._last_processing_position_index == 13
 
 
 def test_first_positioned_event_is_accepted() -> None:
@@ -533,6 +595,86 @@ def test_valid_processing_position_can_authorize_boundary_order_while_reducer_no
     assert state._last_processing_position_index == 41
     assert state.fills == fills_before
     assert state.fill_cum_qty == fill_cum_before
+
+
+def test_positioned_order_submitted_duplicate_is_idempotent_while_cursor_advances() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    first = _order_submitted_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-submitted-dup-1",
+        ts_ns_local_dispatch=700,
+    )
+    duplicate = _order_submitted_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-submitted-dup-1",
+        ts_ns_local_dispatch=701,
+    )
+
+    process_canonical_event(state, first, position=ProcessingPosition(index=42))
+    projection_before = copy.deepcopy(
+        state.canonical_orders[("BTC-USDC-PERP", "order-submitted-dup-1")]
+    )
+
+    process_canonical_event(state, duplicate, position=ProcessingPosition(index=43))
+
+    projection_after = state.canonical_orders[("BTC-USDC-PERP", "order-submitted-dup-1")]
+    assert state._last_processing_position_index == 43
+    assert projection_after == projection_before
+
+
+def test_order_submitted_event_does_not_regress_existing_canonical_state() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    key = ("BTC-USDC-PERP", "order-no-regress-1")
+    first = _order_submitted_event(
+        instrument=key[0],
+        client_order_id=key[1],
+        ts_ns_local_dispatch=800,
+    )
+    accepted = _fill_event(
+        instrument=key[0],
+        client_order_id=key[1],
+        ts_ns_local=810,
+        ts_ns_exch=805,
+        cum_filled_qty=0.25,
+    )
+    late_submitted = _order_submitted_event(
+        instrument=key[0],
+        client_order_id=key[1],
+        ts_ns_local_dispatch=820,
+    )
+
+    process_canonical_event(state, first, position=ProcessingPosition(index=50))
+    state.apply_order_state_event(
+        _order_state_event(
+            instrument=key[0],
+            client_order_id=key[1],
+            ts_ns_local=815,
+            ts_ns_exch=815,
+            state_type="accepted",
+        )
+    )
+    process_canonical_event(state, accepted, position=ProcessingPosition(index=51))
+    process_canonical_event(state, late_submitted, position=ProcessingPosition(index=52))
+
+    projection = state.canonical_orders[key]
+    assert projection.state == "accepted"
+    assert projection.submitted_ts_ns_local == 800
+    assert projection.updated_ts_ns_local == 815
+    assert state._last_processing_position_index == 52
+
+
+def test_order_submitted_event_does_not_mutate_snapshot_orders() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = _order_submitted_event(
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-snapshot-isolation-1",
+        ts_ns_local_dispatch=900,
+    )
+
+    process_canonical_event(state, event, position=ProcessingPosition(index=60))
+
+    assert state.orders == {}
+    assert state.canonical_orders[("BTC-USDC-PERP", "order-snapshot-isolation-1")].state == "submitted"
 
 
 def test_process_canonical_event_rejects_order_state_event() -> None:

@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from enum import Enum
 
-from trading_framework.core.domain.types import FillEvent, MarketEvent, OrderStateEvent
+from trading_framework.core.domain.types import (
+    FillEvent,
+    MarketEvent,
+    OrderStateEvent,
+    OrderSubmittedEvent,
+)
 from trading_framework.core.events.events import (
     DerivedFillEvent,
     DerivedPnLEvent,
@@ -42,6 +47,7 @@ CANONICAL_EVENT_CATEGORY_NAMES: tuple[str, ...] = tuple(
 # candidate status does not imply it is newly wired into runtime flow.
 CANONICAL_STREAM_CANDIDATE_CATEGORY_BY_TYPE: dict[type[object], CanonicalEventCategory] = {
     MarketEvent: CanonicalEventCategory.MARKET,
+    OrderSubmittedEvent: CanonicalEventCategory.INTENT_RELATED,
     FillEvent: CanonicalEventCategory.EXECUTION,
 }
 

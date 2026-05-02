@@ -6,7 +6,13 @@ import ast
 from pathlib import Path
 
 _ALLOWED_CALLER = Path("trading_framework/core/domain/processing.py")
-_TARGET_METHODS = frozenset({"update_market", "apply_fill_event"})
+_TARGET_METHODS = frozenset(
+    {
+        "update_market",
+        "apply_fill_event",
+        "apply_order_submitted_event",
+    }
+)
 
 
 def _iter_python_files(root: Path) -> list[Path]:

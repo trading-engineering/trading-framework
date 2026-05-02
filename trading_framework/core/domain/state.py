@@ -34,7 +34,12 @@ from trading_framework.core.events.events import (
 )
 
 if TYPE_CHECKING:
-    from trading_framework.core.domain.types import FillEvent, NewOrderIntent, OrderIntent
+    from trading_framework.core.domain.types import (
+        FillEvent,
+        NewOrderIntent,
+        OrderIntent,
+        OrderSubmittedEvent,
+    )
     from trading_framework.core.events.event_bus import EventBus
 
 
@@ -258,6 +263,30 @@ class StrategyState:
             submitted_ts_ns_local=ts_now,
             updated_ts_ns_local=ts_now,
         )
+
+    def apply_order_submitted_event(self, event: OrderSubmittedEvent) -> None:
+        """Reduce canonical dispatch-time submitted entry into lifecycle projection.
+
+        This reducer updates only internal canonical lifecycle projection state.
+        It intentionally does not mutate compatibility snapshot orders, inflight
+        bookkeeping, or last-sent tracking.
+        """
+        key = (event.instrument, event.client_order_id)
+        projection = self.canonical_orders.get(key)
+        if projection is None:
+            self.canonical_orders[key] = CanonicalOrderProjection(
+                instrument=event.instrument,
+                client_order_id=event.client_order_id,
+                state="submitted",
+                submitted_ts_ns_local=event.ts_ns_local_dispatch,
+                updated_ts_ns_local=event.ts_ns_local_dispatch,
+            )
+            return
+
+        # Idempotent submitted-entry behavior:
+        # - If already submitted, keep existing projection unchanged.
+        # - If already beyond submitted, do not regress lifecycle state.
+        return
 
     def _clear_inflight(self, instrument: str, client_order_id: str) -> None:
         inflight_bucket = self.inflight.get(instrument)

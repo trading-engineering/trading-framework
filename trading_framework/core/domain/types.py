@@ -337,6 +337,31 @@ class FillEvent(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# OrderSubmittedEvent model (dispatch-time submitted boundary event)
+# ---------------------------------------------------------------------------
+
+
+class OrderSubmittedEvent(BaseModel):
+    ts_ns_local_dispatch: int = Field(..., gt=0)
+
+    instrument: str = Field(..., min_length=1)
+    client_order_id: str = Field(..., min_length=1)
+
+    side: Literal["buy", "sell"]
+    order_type: Literal["limit", "market"]
+
+    intended_price: Price
+    intended_qty: Quantity
+    time_in_force: Literal["GTC", "IOC", "FOK", "POST_ONLY"]
+
+    intent_correlation_id: str | None = Field(default=None, min_length=1)
+    dispatch_attempt_id: str | None = Field(default=None, min_length=1)
+    runtime_correlation: dict[str, str | int | float | bool | None] | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+# ---------------------------------------------------------------------------
 # OrderStateEvent model (snapshot event)
 # ---------------------------------------------------------------------------
 

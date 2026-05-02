@@ -8,7 +8,13 @@ order lifecycle projection that begins at dispatch/submission.
 from __future__ import annotations
 
 from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import NewOrderIntent, OrderStateEvent, Price, Quantity
+from trading_framework.core.domain.types import (
+    NewOrderIntent,
+    OrderStateEvent,
+    OrderSubmittedEvent,
+    Price,
+    Quantity,
+)
 from trading_framework.core.events.sinks.null_event_bus import NullEventBus
 
 
@@ -51,6 +57,27 @@ def _order_state_event(
         time_in_force="GTC",
         reason=None,
         raw={"req": req, "source": "snapshot"},
+    )
+
+
+def _order_submitted_event(
+    instrument: str,
+    client_order_id: str,
+    *,
+    ts_ns_local_dispatch: int,
+) -> OrderSubmittedEvent:
+    return OrderSubmittedEvent(
+        ts_ns_local_dispatch=ts_ns_local_dispatch,
+        instrument=instrument,
+        client_order_id=client_order_id,
+        side="buy",
+        order_type="limit",
+        intended_price=Price(currency="USDC", value=100.0),
+        intended_qty=Quantity(unit="contracts", value=1.0),
+        time_in_force="GTC",
+        intent_correlation_id="corr-1",
+        dispatch_attempt_id="attempt-1",
+        runtime_correlation={"engine": "backtest", "seq": 1},
     )
 
 
@@ -150,6 +177,52 @@ def test_mark_intent_sent_new_creates_canonical_submitted_projection() -> None:
     assert projection.state == "submitted"
     assert projection.submitted_ts_ns_local == 300
     assert projection.updated_ts_ns_local == 300
+
+
+def test_order_submitted_event_creates_projection_without_mark_intent_sent() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-stream-submitted-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.apply_order_submitted_event(
+        _order_submitted_event(
+            instrument,
+            client_order_id,
+            ts_ns_local_dispatch=305,
+        )
+    )
+
+    projection = state.canonical_orders[(instrument, client_order_id)]
+    assert projection.state == "submitted"
+    assert projection.submitted_ts_ns_local == 305
+    assert projection.updated_ts_ns_local == 305
+    assert state.orders == {}
+
+
+def test_mark_intent_sent_new_remains_unchanged_when_projection_preexists() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-coexistence-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.apply_order_submitted_event(
+        _order_submitted_event(
+            instrument,
+            client_order_id,
+            ts_ns_local_dispatch=310,
+        )
+    )
+    before = state.canonical_orders[(instrument, client_order_id)]
+
+    state.update_timestamp(320)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    after = state.canonical_orders[(instrument, client_order_id)]
+    assert after.submitted_ts_ns_local == before.submitted_ts_ns_local
+    assert after.updated_ts_ns_local == before.updated_ts_ns_local
+    assert after.state == "submitted"
+    # Existing compatibility bookkeeping behavior remains intact.
+    assert state.has_inflight(instrument, client_order_id)
+    assert state.last_sent_intents[instrument][client_order_id] == (320, "new")
 
 
 def test_queue_residency_alone_does_not_create_canonical_order() -> None:

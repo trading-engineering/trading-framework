@@ -25,7 +25,7 @@ from trading_framework.core.domain.event_model import (
 )
 from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import FillEvent, MarketEvent
+from trading_framework.core.domain.types import FillEvent, MarketEvent, OrderSubmittedEvent
 
 
 def _extract_required_positive_number(value: object, *, field_path: str) -> float:
@@ -103,6 +103,7 @@ def process_canonical_event(
 
     Accepted canonical candidates in the current slice:
     - ``MarketEvent`` (category: ``market``)
+    - ``OrderSubmittedEvent`` (category: ``intent_related``)
     - ``FillEvent`` (category: ``execution``)
 
     ``ProcessingPosition`` is accepted as Processing Order metadata at this
@@ -170,6 +171,15 @@ def process_canonical_event(
         if position is not None:
             state._advance_processing_position(position)
         state.apply_fill_event(event)
+        return
+
+    if (
+        category == CanonicalEventCategory.INTENT_RELATED
+        and isinstance(event, OrderSubmittedEvent)
+    ):
+        if position is not None:
+            state._advance_processing_position(position)
+        state.apply_order_submitted_event(event)
         return
 
     raise TypeError(
