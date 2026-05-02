@@ -43,8 +43,7 @@ def process_canonical_event(
 
     ``ProcessingPosition`` is accepted as Processing Order metadata at this
     boundary. When provided, positions must be strictly increasing. This
-    function is not a full Event Stream or replay layer, and reducers preserve
-    existing timestamp-based behavior.
+    function is not a full Event Stream or replay layer.
 
     Non-canonical records (compatibility projections, telemetry payloads, bus
     transports, and helper artifacts) are rejected at this boundary.
@@ -72,19 +71,31 @@ def process_canonical_event(
 
         if position is not None:
             state._advance_processing_position(position)
-
-        state.update_market(
-            instrument=event.instrument,
-            best_bid=best_bid_level.price.value,
-            best_ask=best_ask_level.price.value,
-            best_bid_qty=best_bid_level.quantity.value,
-            best_ask_qty=best_ask_level.quantity.value,
-            tick_size=0.0,
-            lot_size=0.0,
-            contract_size=1.0,
-            ts_ns_local=event.ts_ns_local,
-            ts_ns_exch=event.ts_ns_exch,
-        )
+            state._update_market_from_positioned_canonical_event(
+                instrument=event.instrument,
+                best_bid=best_bid_level.price.value,
+                best_ask=best_ask_level.price.value,
+                best_bid_qty=best_bid_level.quantity.value,
+                best_ask_qty=best_ask_level.quantity.value,
+                tick_size=0.0,
+                lot_size=0.0,
+                contract_size=1.0,
+                ts_ns_local=event.ts_ns_local,
+                ts_ns_exch=event.ts_ns_exch,
+            )
+        else:
+            state.update_market(
+                instrument=event.instrument,
+                best_bid=best_bid_level.price.value,
+                best_ask=best_ask_level.price.value,
+                best_bid_qty=best_bid_level.quantity.value,
+                best_ask_qty=best_ask_level.quantity.value,
+                tick_size=0.0,
+                lot_size=0.0,
+                contract_size=1.0,
+                ts_ns_local=event.ts_ns_local,
+                ts_ns_exch=event.ts_ns_exch,
+            )
         return
 
     if category == CanonicalEventCategory.EXECUTION and isinstance(event, FillEvent):

@@ -377,6 +377,47 @@ class StrategyState:
         else:
             m.mid = 0.0
 
+    def _update_market_from_positioned_canonical_event(
+        self,
+        instrument: str,
+        best_bid: float,
+        best_ask: float,
+        best_bid_qty: float,
+        best_ask_qty: float,
+        tick_size: float,
+        lot_size: float,
+        contract_size: float,
+        *,
+        ts_ns_local: int,
+        ts_ns_exch: int,
+    ) -> None:
+        """Apply market update for a positioned canonical event.
+
+        This helper intentionally bypasses timestamp replacement no-op rules.
+        It is valid only when called after canonical boundary ProcessingPosition
+        monotonicity validation has accepted the event as the next causal input.
+        """
+        m = self.market.get(instrument)
+        if m is None:
+            m = MarketState()
+            self.market[instrument] = m
+
+        m.last_ts_ns_local = ts_ns_local
+        m.last_ts_ns_exch = ts_ns_exch
+
+        m.best_bid = best_bid
+        m.best_ask = best_ask
+        m.best_bid_qty = best_bid_qty
+        m.best_ask_qty = best_ask_qty
+        m.tick_size = tick_size
+        m.lot_size = lot_size
+        m.contract_size = contract_size
+
+        if m.best_bid > 0.0 and m.best_ask > 0.0:
+            m.mid = 0.5 * (m.best_bid + m.best_ask)
+        else:
+            m.mid = 0.0
+
     def get_mid(self, instrument: str) -> float:
         m = self.market.get(instrument)
         return 0.0 if m is None else m.mid

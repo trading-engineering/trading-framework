@@ -286,10 +286,10 @@ def test_event_time_out_of_order_but_position_increasing_is_accepted_at_boundary
     process_canonical_event(state, second, position=ProcessingPosition(index=2))
 
     assert state._last_processing_position_index == 2
-    # Existing reducer behavior remains timestamp-driven in this slice.
+    # Positioned canonical market events are now ProcessingPosition-driven.
     market = state.market["BTC-USDC-PERP"]
-    assert market.last_ts_ns_local == 200
-    assert market.last_ts_ns_exch == 190
+    assert market.last_ts_ns_local == 100
+    assert market.last_ts_ns_exch == 95
 
 
 def test_position_out_of_order_but_event_time_increasing_is_rejected_at_boundary() -> None:
@@ -390,7 +390,7 @@ def test_interleaved_positioned_and_unpositioned_processing_preserves_cursor_mon
     assert state._last_processing_position_index == 11
 
 
-def test_positioned_market_tiebreak_remains_exchange_timestamp_compatibility_behavior() -> None:
+def test_positioned_market_tiebreak_no_longer_gates_positioned_market_updates() -> None:
     state = StrategyState(event_bus=NullEventBus())
     base = _book_market_event(
         instrument="BTC-USDC-PERP",
@@ -420,9 +420,9 @@ def test_positioned_market_tiebreak_remains_exchange_timestamp_compatibility_beh
     market = state.market["BTC-USDC-PERP"]
     assert state._last_processing_position_index == 31
     assert market.last_ts_ns_local == 300
-    assert market.last_ts_ns_exch == 200
-    assert market.best_bid == 100.0
-    assert market.best_ask == 101.0
+    assert market.last_ts_ns_exch == 199
+    assert market.best_bid == 80.0
+    assert market.best_ask == 81.0
 
     process_canonical_event(state, higher_exch, position=ProcessingPosition(index=32))
 
