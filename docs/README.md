@@ -16,6 +16,11 @@ semantics.
   Boundary contract draft for runtime-owned mapping into `CoreConfiguration`
   before calling `core` canonical processing APIs.
 
+- **[boundary/deferred]** [Runtime Execution Feedback Contract v1](runtime-execution-feedback-contract-v1.md)  
+  Boundary contract freezing eligibility requirements for future canonical
+  runtime execution feedback emission (including `FillEvent`), while preserving
+  current compatibility projection behavior.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
