@@ -6,6 +6,11 @@
 
 This page freezes the currently implemented and tested semantic kernel of `core` as a **stable implementation contract snapshot (v1)**.
 
+Repository boundary:
+
+- Semantic definitions (Event, Event Stream, Processing Order, Configuration, State, Intent, Order, etc.) live in the main `docs` repository and remain the semantic source of truth.
+- This page is **implementation-facing** documentation for `core` and only claims what is currently implemented and tested in `core` v1.
+
 This page is intentionally narrow:
 
 - it documents what `core` v1 currently guarantees;
@@ -20,7 +25,7 @@ Historical provenance for the positioned market configuration closure is recorde
 
 ## Normative sources and precedence
 
-`CSC-01` — Terminology and architecture concepts remain the semantic source of truth.
+`CSC-01` — Terminology and architecture concepts in the main `docs` repository remain the semantic source of truth.
 
 `CSC-02` — This page defines the **implementation snapshot contract** for current `core` v1. If architecture/concept docs describe broader target semantics not yet implemented in `core`, this page controls claims about current `core` behavior.
 
