@@ -1,8 +1,14 @@
-"""Semantics tests for strict positioned MarketEvent configuration consumption."""
+"""Semantics contract matrix for positioned MarketEvent configuration consumption.
+
+Phase 3A.3 treats this module as the primary guardrail reference for the
+CoreConfiguration -> positioned canonical MarketEvent contract.
+"""
 
 from __future__ import annotations
 
+import ast
 import copy
+from pathlib import Path
 
 import pytest
 
@@ -360,3 +366,33 @@ def test_order_state_event_remains_compatibility_only() -> None:
 
     with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
         process_event_entry(state, entry, configuration=_market_configuration())
+
+
+def test_positioned_market_contract_does_not_import_runtime_configuration_mapping() -> None:
+    """Guardrail: canonical market reducer contract stays CoreConfiguration-only."""
+    repo_root = Path(__file__).resolve().parents[3]
+    processing_path = repo_root / "trading_framework/core/domain/processing.py"
+    tree = ast.parse(processing_path.read_text(encoding="utf-8"), filename=str(processing_path))
+
+    forbidden_modules = (
+        "core_runtime",
+        "trading_runtime",
+        "hft_engine_config",
+        "live_engine_config",
+    )
+    forbidden_symbols = {
+        "HftEngineConfig",
+        "LiveEngineConfig",
+        "RiskConfig",
+    }
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert not alias.name.startswith(forbidden_modules)
+                assert alias.name not in forbidden_symbols
+        if isinstance(node, ast.ImportFrom):
+            if node.module is not None:
+                assert not node.module.startswith(forbidden_modules)
+            for alias in node.names:
+                assert alias.name not in forbidden_symbols
