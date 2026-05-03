@@ -619,3 +619,193 @@ decision and test-backed reconciliation rules.
 implementation.
 
 ---
+
+## Appendix C: hftbacktest source feasibility and gap decision (Phase 4H)
+
+This appendix records the hftbacktest-specific feasibility decision from Phase
+4G and documents the exact source/adapter gap required before any canonical
+`FillEvent` ingress planning.
+
+This appendix is docs-contract only:
+
+- it does not implement canonical `FillEvent` ingress;
+- it does not add or implement adapter APIs;
+- it does not modify runtime behavior;
+- it does not canonicalize `OrderStateEvent`;
+- it does not change `DerivedFillEvent` behavior;
+- it does not change snapshot ingestion behavior;
+- it does not change reducers or event taxonomy;
+- it does not implement replay/storage/`ProcessingContext`/`EventStreamCursor`.
+
+`RAEFSC-134` - Appendix C scope is hftbacktest-specific feasibility and gap
+documentation only; no implementation behavior changes are introduced.
+
+---
+
+### C.1 Decision snapshot
+
+`RAEFSC-135` - Current hftbacktest/core-runtime integration feasibility remains
+decision **C** for `ExecutionFeedbackRecordSource` eligibility.
+
+`RAEFSC-136` - No currently exposed hftbacktest/core-runtime source satisfies
+the `ExecutionFeedbackRecordSource` contract end-to-end under Appendices A and
+B.
+
+`RAEFSC-137` - Canonical runtime `FillEvent` ingress remains deferred for the
+hftbacktest integration in this phase.
+
+---
+
+### C.2 Current exposed source classes and classification
+
+`RAEFSC-138` - `rc == 3` order snapshot path (`orders()` materialization and
+compatibility ingestion) is classified as **partial/ineligible** for canonical
+source authority:
+
+- some required fields may be present in snapshots;
+- source class remains compatibility snapshot materialization, not explicit
+  execution-feedback records;
+- required deterministic non-timestamp `source_sequence` is not exposed;
+- source-authoritative `liquidity_flag` is not satisfied in current runtime
+  exposure;
+- therefore it is ineligible for canonical ingress under A.7/B requirements.
+
+`RAEFSC-139` - submit/modify/cancel synchronous return codes are classified as
+**ineligible**:
+
+- they represent outbound command status only;
+- they are not execution-feedback records and cannot satisfy required
+  authoritative field payload requirements.
+
+`RAEFSC-140` - `wait_next(... include_order_resp=True)` response signaling is
+classified as **insufficient/ineligible**:
+
+- it provides wakeup signaling that an order response occurred;
+- it does not provide structured authoritative execution-feedback payload.
+
+`RAEFSC-141` - `wait_order_response` hook (as currently unwrapped/unused in
+runtime boundary) is classified as **insufficient/ineligible**:
+
+- current exposure does not provide a structured authoritative source record
+  satisfying Appendix A required shape;
+- deterministic source sequencing and full field authority are not provided by
+  current integration boundary.
+
+`RAEFSC-142` - `last_trades` market-trade feed is classified as **ineligible**
+for canonical order execution feedback:
+
+- it is market-trade data, not deterministic own-order execution-feedback
+  records with canonical order correlation guarantees.
+
+`RAEFSC-143` - Latent hftbacktest order-structure fields (including potential
+maker/taker-style flags) are classified as **insufficient unless surfaced
+through explicit authoritative execution-feedback records**:
+
+- latent/internal field presence alone does not satisfy source-channel
+  eligibility;
+- required source contract semantics must be satisfied at the adapter-facing
+  record boundary.
+
+---
+
+### C.3 Exact missing requirements
+
+`RAEFSC-144` - Current hftbacktest/core-runtime integration lacks an explicit
+adapter-facing execution-feedback record channel matching Appendix A required
+shape and Appendix B drain semantics.
+
+`RAEFSC-145` - Current integration lacks deterministic, strictly monotone,
+non-timestamp-derived `source_sequence` semantics suitable for runner merge.
+
+`RAEFSC-146` - Current integration lacks source-authoritative `liquidity_flag`
+semantics satisfying A.3 without synthetic defaulting.
+
+`RAEFSC-147` - Current integration does not provide contracted authoritative
+per-cumulative execution update granularity for canonical source records.
+
+`RAEFSC-148` - Current integration does not expose deterministic replay-stable
+canonical correlation guarantees to `instrument + client_order_id` through an
+explicit source record channel.
+
+`RAEFSC-149` - Deterministic replace/cancel successor correlation mapping chain
+requirements are not currently satisfied at an authoritative source-record
+boundary.
+
+`RAEFSC-150` - Global `ProcessingPosition` merge policy for future execution
+feedback remains runner-owned and must be explicitly specified before
+implementation.
+
+`RAEFSC-151` - No-double-counting cutover policy relative to
+`DerivedFillEvent` compatibility progression remains required before canonical
+dual-path operation.
+
+---
+
+### C.4 Minimum required extension boundary (future, non-implemented)
+
+`RAEFSC-152` - Minimum required extension is a hftbacktest wrapper/adapter
+capability that provides authoritative `ExecutionFeedbackRecordSource`
+semantics at the venue-side adapter boundary.
+
+`RAEFSC-153` - Future source records must satisfy Appendix A required source
+shape, field authority, correlation, granularity, and liquidity clauses.
+
+`RAEFSC-154` - Adapter/source capability must satisfy Appendix B drain
+capability semantics (`drain_execution_feedback_records`) including deterministic
+ordering and non-replay of drained records.
+
+`RAEFSC-155` - Adapter/source capability must own and enforce deterministic
+strictly monotone non-timestamp `source_sequence` semantics.
+
+`RAEFSC-156` - Runner remains owner of global `ProcessingPosition` merge policy
+and canonical positioned ingestion ordering across categories.
+
+`RAEFSC-157` - Until explicit authority cutover, current snapshot compatibility
+path (`OrderStateEvent` materialization and `DerivedFillEvent`) remains
+unchanged semantic authority, and first future implementation path should be
+shadow-only unless separately approved.
+
+---
+
+### C.5 Explicit non-goals for Phase 4H
+
+`RAEFSC-158` - Do not promote order snapshots to canonical execution-feedback
+authority in this phase.
+
+`RAEFSC-159` - Do not treat submit/modify/cancel return codes as canonical
+execution feedback.
+
+`RAEFSC-160` - Do not infer canonical fill authority from market-trade feed.
+
+`RAEFSC-161` - Do not synthesize `liquidity_flag` to satisfy required field
+authority.
+
+`RAEFSC-162` - Do not canonicalize `OrderStateEvent` in this phase.
+
+`RAEFSC-163` - Do not remove or alter `DerivedFillEvent` behavior in this
+phase.
+
+`RAEFSC-164` - Do not implement adapter APIs in this phase.
+
+---
+
+### C.6 Future implementation gate for hftbacktest scope
+
+`RAEFSC-165` - Canonical `FillEvent` implementation planning for hftbacktest
+scope may begin only after all C.3 missing requirements are satisfied under
+Appendix A/B contracts.
+
+`RAEFSC-166` - First implementation path should remain shadow-only unless a
+separate explicit authority cutover decision is approved.
+
+`RAEFSC-167` - Before implementation/cutover, tests must be possible and
+planned for:
+
+- deterministic `source_sequence` monotonicity and non-timestamp derivation;
+- required-field source authority (including `liquidity_flag`);
+- deterministic canonical correlation (including successor mapping where
+  applicable);
+- no-double-counting behavior relative to `DerivedFillEvent`;
+- deterministic global merge ordering under runner-owned `ProcessingPosition`.
+
+---
