@@ -49,6 +49,11 @@ semantics.
   split for future `ProcessingContext` and `EventStreamCursor` abstractions
   without implementation or runtime behavior changes.
 
+- **[boundary/characterization]** [EventStreamCursor Characterization Note v1](event-stream-cursor-characterization-v1.md)  
+  Read-only characterization of current runtime canonical position counter
+  behavior and extraction invariants for future `EventStreamCursor` work,
+  without implementation or behavior change.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
