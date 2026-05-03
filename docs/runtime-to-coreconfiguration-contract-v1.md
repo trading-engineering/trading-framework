@@ -8,11 +8,13 @@ This document defines a **boundary contract draft (v1)** for how runtime-owned r
 configuration is mapped into `CoreConfiguration` before calling core canonical
 processing APIs.
 
-This is a planning/docs-only contract slice:
+This is a boundary-contract slice that originated as planning-oriented guidance
+and now documents the currently implemented ownership boundary:
 
 - it defines ownership boundaries and validation expectations;
 - it documents the minimum mapping target required by current core behavior;
-- it does not implement runtime mapping;
+- runtime mapping is implemented in `core-runtime` under runtime ownership;
+- this page does not redefine runtime implementation internals;
 - it does not introduce new core behavior.
 
 ---

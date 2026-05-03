@@ -85,7 +85,7 @@ Historical provenance for the positioned market configuration closure is recorde
 
 `CSC-15` — For positioned canonical processing, position indexes are strictly monotonic; repeated or regressing indexes fail.
 
-`CSC-16` — Processing position cursor advancement is boundary-owned behavior and remains guarded against out-of-boundary mutation patterns.
+`CSC-16` — Within the `core` package canonical boundary, processing position cursor advancement is boundary-owned behavior and remains guarded against out-of-boundary mutation patterns by current `core` semantics coverage. This clause does not claim repo-wide enforcement outside `core`.
 
 `CSC-17` — Positioned boundary acceptance order follows `ProcessingPosition` monotonicity, not event timestamp ordering.
 

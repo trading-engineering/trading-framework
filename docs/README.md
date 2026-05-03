@@ -13,8 +13,9 @@ semantics.
   guarantees and boundaries.
 
 - **[boundary]** [Runtime-to-CoreConfiguration Contract Boundary v1](runtime-to-coreconfiguration-contract-v1.md)  
-  Boundary contract draft for runtime-owned mapping into `CoreConfiguration`
-  before calling `core` canonical processing APIs.
+  Boundary contract for runtime-owned mapping into `CoreConfiguration`
+  before calling `core` canonical processing APIs; mapping is implemented in
+  `core-runtime`, while this page defines boundary expectations.
 
 - **[boundary/deferred]** [Runtime Execution Feedback Contract v1](runtime-execution-feedback-contract-v1.md)  
   Boundary contract freezing eligibility requirements for future canonical
