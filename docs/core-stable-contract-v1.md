@@ -164,7 +164,10 @@ Historical provenance for the positioned market configuration closure is recorde
 
 `CSC-37` — Full replay engine/runtime integration.
 
-`CSC-38` — `ProcessingContext` / `EventStreamCursor` extraction or introduction.
+`CSC-38` — `ProcessingContext` introduction and broader replay/storage-oriented
+`EventStreamCursor` extraction in `core` scope. (A runtime-only
+`EventStreamCursor` ordering helper exists in `core-runtime` and is outside
+this `core` stable-contract scope.)
 
 ---
 

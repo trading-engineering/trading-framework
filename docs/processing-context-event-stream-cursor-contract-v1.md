@@ -4,12 +4,14 @@
 
 ## Purpose and scope
 
-This document defines docs-only ownership and boundary semantics for future
-`ProcessingContext` and `EventStreamCursor` abstractions.
+This document defines docs-only ownership and boundary semantics for deferred
+`ProcessingContext` abstraction work and runtime-owned `EventStreamCursor`
+boundary responsibilities.
 
 This is a planning/contract slice only:
 
-- it does not implement `ProcessingContext` or `EventStreamCursor`;
+- it does not implement `ProcessingContext`;
+- it does not introduce new `EventStreamCursor` behavior;
 - it does not change runtime behavior;
 - it does not change reducers or event taxonomy;
 - it does not implement canonical `FillEvent` ingress;
@@ -102,9 +104,8 @@ move into `EventStreamEntry` payload shape.
 
 ## Current state snapshot (frozen for this phase)
 
-`PCESC-23` - Current runtime runner ownership uses an internal
-`_next_canonical_processing_position_index` counter for canonical positioned
-entry formation.
+`PCESC-23` - Current runtime runner uses a runtime-owned `EventStreamCursor`
+ordering helper for canonical positioned entry formation.
 
 `PCESC-24` - Current runtime runner creates `EventStreamEntry` records at the
 runner boundary before calling `process_event_entry(...)`.
@@ -120,9 +121,8 @@ compatibility behavior in this phase.
 
 ## Conceptual future relation (non-implemented)
 
-`PCESC-27` - If implemented in a future slice, `EventStreamCursor` would replace
-ad hoc runtime canonical counters while preserving current global ordering
-semantics.
+`PCESC-27` - Future slices may extend/refine `EventStreamCursor` integration
+while preserving current global ordering semantics.
 
 `PCESC-28` - If implemented in a future slice, `ProcessingContext` would gather
 run/session invocation-scope metadata without changing canonical payload shapes.

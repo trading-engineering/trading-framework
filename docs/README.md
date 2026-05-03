@@ -45,14 +45,18 @@ semantics.
   implementation or runtime behavior changes.
 
 - **[boundary/deferred-abstraction]** [ProcessingContext / EventStreamCursor Contract v1](processing-context-event-stream-cursor-contract-v1.md)  
-  Docs-only boundary contract defining conceptual ownership and responsibility
-  split for future `ProcessingContext` and `EventStreamCursor` abstractions
-  without implementation or runtime behavior changes.
+  Docs-only boundary contract defining ownership and responsibility split for
+  runtime-owned `EventStreamCursor` and deferred `ProcessingContext`
+  abstraction work, without introducing behavior changes in this slice.
 
 - **[boundary/characterization]** [EventStreamCursor Characterization Note v1](event-stream-cursor-characterization-v1.md)  
-  Read-only characterization of current runtime canonical position counter
-  behavior and extraction invariants for future `EventStreamCursor` work,
-  without implementation or behavior change.
+  Read-only characterization of current runtime `EventStreamCursor` behavior
+  and invariants, without introducing implementation or behavior change.
+
+- **[milestone/closure]** [Semantic Core Upgrade Milestone Closure v1](semantic-core-upgrade-milestone-closure-v1.md)  
+  Docs-only closure snapshot of satisfied, transitional, and deferred semantic
+  implementation status and current usability statements for `core` and
+  `core-runtime`.
 
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
@@ -65,4 +69,4 @@ semantics.
 - FillEvent runtime ingress and source authority rollout.
 - Post-submission execution feedback canonicalization.
 - `OrderStateEvent` canonicalization.
-- Replay/storage/`ProcessingContext`/`EventStreamCursor` and full runtime stream integration.
+- Replay/storage/`ProcessingContext` and full runtime stream integration.

@@ -4,13 +4,13 @@
 
 ## Purpose and scope
 
-This note characterizes the **current runtime cursor behavior** used for canonical
-`ProcessingPosition` assignment and records invariants that any future
-`EventStreamCursor` extraction must preserve.
+This note characterizes the **current runtime EventStreamCursor behavior** used
+for canonical `ProcessingPosition` assignment and records invariants for future
+runtime extraction/refinement work.
 
 This is read-only characterization/planning documentation:
 
-- it does not implement `EventStreamCursor`;
+- it does not introduce new `EventStreamCursor` behavior;
 - it does not implement `ProcessingContext`;
 - it does not change runtime behavior;
 - it does not change reducers or event taxonomy;
@@ -40,23 +40,24 @@ redefine existing contracts.
 Current behavior is implemented in
 `core-runtime/trading_runtime/backtest/engine/strategy_runner.py`.
 
-`ESCC-04` - Runtime runner owns `_next_canonical_processing_position_index`.
+`ESCC-04` - Runtime runner owns an `EventStreamCursor` instance.
 
-`ESCC-05` - Initial counter value is `0`.
+`ESCC-05` - Cursor starts at index `0`.
 
-`ESCC-06` - `_process_canonical_event(...)` constructs `EventStreamEntry` using
-the current counter value as `ProcessingPosition(index=...)`.
+`ESCC-06` - `_process_canonical_event(...)` calls
+`EventStreamCursor.attempt_position()` and constructs `EventStreamEntry`
+with the returned `ProcessingPosition`.
 
 `ESCC-07` - Runner calls `process_event_entry(state, entry, configuration=core_cfg)`
 for canonical boundary processing.
 
-`ESCC-08` - Counter increments by exactly `+1` only after successful
-`process_event_entry(...)` return.
+`ESCC-08` - Cursor advances by exactly `+1` only after successful
+`process_event_entry(...)` return via `commit_success(...)`.
 
-`ESCC-09` - If canonical boundary processing raises, counter does not advance
-(increment line is not reached).
+`ESCC-09` - If canonical boundary processing raises, cursor does not advance.
 
-`ESCC-10` - One global counter is shared by currently wired canonical categories:
+`ESCC-10` - One global cursor sequence is shared by currently wired canonical
+categories:
 
 - `MarketEvent`
 - `OrderSubmittedEvent`
@@ -83,7 +84,7 @@ each successful canonical boundary processing call.
 
 `ESCC-16` - Failed canonical processing must not consume/advance position.
 
-`ESCC-17` - Counter scope remains global across canonical categories; no
+`ESCC-17` - Cursor scope remains global across canonical categories; no
 category-local counters.
 
 `ESCC-18` - Compatibility snapshot path (`rc == 3`) remains non-canonical and
@@ -101,7 +102,8 @@ position allocator.
 
 ## Future EventStreamCursor extraction semantics (non-implemented)
 
-`ESCC-22` - Any future `EventStreamCursor` remains runtime-owned and ordering-only.
+`ESCC-22` - Any future `EventStreamCursor` work remains runtime-owned and
+ordering-only.
 
 `ESCC-23` - Recommended extraction model is reservation/commit semantics:
 
@@ -150,7 +152,8 @@ dedicated assertion currently checks that runner cursor remains unchanged during
 
 ## Out of scope
 
-`ESCC-31` - `EventStreamCursor` implementation.
+`ESCC-31` - Additional `EventStreamCursor` feature expansion beyond the current
+runtime ordering helper behavior characterized here.
 
 `ESCC-32` - `ProcessingContext` implementation.
 
