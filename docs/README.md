@@ -43,6 +43,11 @@ semantics.
   capability categories and semantic authority classifications without API
   implementation or runtime behavior changes.
 
+- **[boundary/deferred-abstraction]** [ProcessingContext / EventStreamCursor Contract v1](processing-context-event-stream-cursor-contract-v1.md)  
+  Docs-only boundary contract defining conceptual ownership and responsibility
+  split for future `ProcessingContext` and `EventStreamCursor` abstractions
+  without implementation or runtime behavior changes.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
