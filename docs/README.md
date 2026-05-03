@@ -38,6 +38,11 @@ semantics.
   `OrderSubmittedEvent` and compatibility-governed post-submission lifecycle
   progression until execution-feedback source gates are satisfied.
 
+- **[boundary/model]** [Venue Adapter Capability Model v1](venue-adapter-capability-model-v1.md)  
+  Docs-only venue-agnostic capability model defining adapter/runtime source
+  capability categories and semantic authority classifications without API
+  implementation or runtime behavior changes.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
