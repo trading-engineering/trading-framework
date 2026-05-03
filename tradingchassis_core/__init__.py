@@ -13,7 +13,7 @@ from importlib.metadata import PackageNotFoundError, version
 # ----------------------------------------------------------------------
 #
 # Backtest engine/runtime code is runtime-owned and has moved to the
-# `trading-runtime` repository (import from `trading_runtime.backtest.*`).
+# Core Runtime repository (import from `core_runtime.backtest.*`).
 #
 # This semantic-core package must remain importable without the runtime layer.
 from tradingchassis_core.core.domain.slots import (
@@ -83,6 +83,6 @@ __all__ = [
 # ----------------------------------------------------------------------
 
 try:
-    __version__ = version("trading-framework")
+    __version__ = version("tradingchassis-core")
 except PackageNotFoundError:
     __version__ = "0.0.0"

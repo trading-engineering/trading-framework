@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 
 
-def test_legacy_and_new_nested_modules_share_identity() -> None:
+def test_nested_modules_share_identity_across_import_sites() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         import tradingchassis_core.core.domain.processing as old_processing
@@ -16,7 +16,7 @@ def test_legacy_and_new_nested_modules_share_identity() -> None:
     assert old_processing is new_processing
 
 
-def test_legacy_and_new_symbols_share_identity() -> None:
+def test_symbols_share_identity_across_import_sites() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         from tradingchassis_core.core.domain.configuration import (

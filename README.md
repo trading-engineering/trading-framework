@@ -13,10 +13,10 @@ explicit risk management, order state machines, queue semantics, and research or
 ## 🧠 What is this?
 
 This project wraps the open-source `hftbacktest` engine and extends it
-into a structured trading framework.
+into a structured core.
 
 While `hftbacktest` provides a high-performance event-driven simulation
-core, this framework adds the missing layers required for realistic
+core, this core adds the missing layers required for realistic
 research and strategy development:
 
 - Explicit order state machine
@@ -93,15 +93,15 @@ For runnable backtests and runtime entrypoints, use `core-runtime` (the runtime/
 A reproducible development environment is provided via a dev container.
 
 ```bash
-git clone https://github.com/trading-engineering/trading-framework
-cd trading-framework
+git clone https://github.com/TradingChassis/core
+cd core
 ```
 
 Open in an IDE supporting Dev Containers, reopen in container, then:
 
 ```bash
 cd ../core-runtime
-python trading_runtime/local/backtest.py --config trading_runtime/local/local.json
+python -m core_runtime.local.backtest --config core_runtime/local/local.json
 ```
 
 No manual `pip install` required inside the container.
@@ -180,7 +180,7 @@ core-runtime/tests/data/scripts/
 ## ⚙️ Configuration
 
 Execution is driven by explicit configuration files
-(see `core-runtime/trading_runtime/local/local.json` for a runnable example).
+(see `core-runtime/core_runtime/local/local.json` for a runnable example).
 
 Configurations define:
 

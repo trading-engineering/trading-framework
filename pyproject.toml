@@ -3,7 +3,7 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "core"
+name = "tradingchassis-core"
 version = "0.1.0"
 description = "Deterministic, event-driven core, with explicit risk management, order state machines, queue semantics, and research orchestration."
 readme = "README.md"

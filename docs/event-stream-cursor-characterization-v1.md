@@ -38,7 +38,7 @@ redefine existing contracts.
 ## Current runtime cursor behavior (characterized)
 
 Current behavior is implemented in
-`core-runtime/trading_runtime/backtest/engine/strategy_runner.py`.
+`core-runtime/core_runtime/backtest/engine/strategy_runner.py`.
 
 `ESCC-04` - Runtime runner owns an `EventStreamCursor` instance.
 
