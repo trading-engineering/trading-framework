@@ -33,6 +33,11 @@ semantics.
   Implemented-transition boundary contract for canonical Control-Time Event
   realization semantics and coexistence constraints with compatibility wakeups.
 
+- **[boundary/compatibility-map]** [Post-Submission Lifecycle Compatibility Map v1](post-submission-lifecycle-compatibility-map-v1.md)  
+  Docs-only authority split map freezing canonical `Submitted` entry via
+  `OrderSubmittedEvent` and compatibility-governed post-submission lifecycle
+  progression until execution-feedback source gates are satisfied.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
