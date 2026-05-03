@@ -257,3 +257,167 @@ ordering determinism before ingress rollout.
 implementation.
 
 ---
+
+## Appendix A: ExecutionFeedbackRecord adapter-facing source shape (Phase 4D)
+
+This appendix is adapter-facing and defines the minimum conceptual source shape
+required before future canonical `FillEvent` ingress work may start.
+
+This appendix is docs-contract only:
+
+- it does not implement `FillEvent` ingress;
+- it does not add adapter APIs;
+- it does not make current runtime eligible;
+- it does not modify runtime behavior;
+- it does not change snapshot compatibility behavior.
+
+`RAEFSC-51` - Current feasibility decision remains **C**: no existing
+runtime-adapter source satisfies this source contract end-to-end.
+
+`RAEFSC-52` - Canonical runtime `FillEvent` ingress remains deferred.
+
+`RAEFSC-53` - Compatibility projection authority is preserved in this phase:
+`DerivedFillEvent` remains the active compatibility path and snapshot
+materialization semantics remain unchanged.
+
+---
+
+### A.1 Conceptual ExecutionFeedbackRecord source shape
+
+`RAEFSC-54` - The minimum conceptual adapter-facing source record
+(`ExecutionFeedbackRecord`) for future canonical ingress requires:
+
+- `source_sequence`
+- `ts_ns_exch`
+- `ts_ns_local`
+- `instrument`
+- `client_order_id`
+- optional `venue_order_id`
+- `side`
+- `time_in_force`
+- `filled_price`
+- `cum_filled_qty`
+- `liquidity_flag`
+
+`RAEFSC-55` - Optional authoritative fields, when provided, include:
+
+- `fee`
+- `remaining_qty`
+- `intended_price`
+- `intended_qty`
+- source metadata such as `source_id`, `venue`, or adapter metadata when needed
+  for deterministic boundary mapping and observability.
+
+`RAEFSC-56` - This shape is conceptual boundary documentation only and does not
+define or introduce implementation APIs in this phase.
+
+---
+
+### A.2 source_sequence contract
+
+`RAEFSC-57` - `source_sequence` must be strictly monotone within the adapter's
+execution-feedback source stream.
+
+`RAEFSC-58` - `source_sequence` must be deterministic for replay-equivalent
+inputs and configuration.
+
+`RAEFSC-59` - `source_sequence` must not be timestamp-derived.
+
+`RAEFSC-60` - `source_sequence` must be stable enough for runner merge into
+global `ProcessingPosition` ordering semantics.
+
+---
+
+### A.3 Liquidity authority contract
+
+`RAEFSC-61` - `liquidity_flag` values (`maker`, `taker`, `unknown`) must be
+source-authoritative.
+
+`RAEFSC-62` - `unknown` is allowed only when explicitly reported by the source
+as unknown or indeterminate.
+
+`RAEFSC-63` - Synthetic defaulting to `unknown` is prohibited.
+
+---
+
+### A.4 Identity and correlation contract
+
+`RAEFSC-64` - Canonical correlation to `instrument + client_order_id` is
+required for source record eligibility.
+
+`RAEFSC-65` - `venue_order_id` is correlation metadata for v1 unless a future
+explicit contract revision changes canonical identity semantics.
+
+`RAEFSC-66` - Replace/cancel successor correlation mapping must be explicit,
+deterministic, and replay-stable.
+
+`RAEFSC-67` - Source records without deterministic canonical correlation are
+ineligible for canonical ingress.
+
+---
+
+### A.5 Ordering and merge contract
+
+`RAEFSC-68` - Adapter/source must provide deterministic source order for
+execution-feedback records.
+
+`RAEFSC-69` - Runner owns merge into global `ProcessingPosition` ordering
+across canonical `MarketEvent`, `OrderSubmittedEvent`, `ControlTimeEvent`, and
+future canonical `FillEvent`.
+
+`RAEFSC-70` - `ProcessingOrder` must not be timestamp-derived.
+
+`RAEFSC-71` - Relative ordering policy for execution feedback versus other
+canonical categories must be explicit before implementation.
+
+---
+
+### A.6 No-double-counting cutover policy
+
+`RAEFSC-72` - Compatibility `DerivedFillEvent` progression remains current
+authority until explicit cutover is defined and approved.
+
+`RAEFSC-73` - Future canonical `FillEvent` path must not duplicate semantic
+fill progression for the same canonical order progression.
+
+`RAEFSC-74` - Pre-cutover operation requires either:
+
+- shadow-only comparison phase; or
+- explicit authority cutover/reconciliation policy.
+
+`RAEFSC-75` - Duplicate semantic progression detection should include at least
+`instrument`, `client_order_id`, and `cum_filled_qty`.
+
+---
+
+### A.7 Ineligible current source classes (explicit)
+
+`RAEFSC-76` - The following source classes are ineligible in this phase:
+
+- order snapshots (compatibility materialization path);
+- submit/modify/cancel return codes (not execution-feedback records);
+- recorder/offline artifacts unless replayed through an authoritative positioned
+  stream contract;
+- market trade feed inference;
+- unwrapped `wait_order_response` without structured authoritative payload,
+  deterministic `source_sequence`, and required field authority.
+
+---
+
+### A.8 Acceptance criteria before implementation planning
+
+`RAEFSC-77` - Implementation planning for canonical ingress requires all of:
+
+- source record channel exists;
+- required fields are authoritative;
+- liquidity semantics satisfy A.3;
+- deterministic `source_sequence` exists;
+- canonical correlation exists per A.4;
+- merge ordering policy exists per A.5;
+- no-double-counting policy exists per A.6;
+- tests are possible for duplicates/regressions/idempotence/ordering.
+
+`RAEFSC-78` - Until `RAEFSC-77` is satisfied, feasibility remains decision **C**
+and canonical runtime `FillEvent` ingress stays deferred.
+
+---
