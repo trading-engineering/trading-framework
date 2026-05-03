@@ -58,6 +58,10 @@ semantics.
   implementation status and current usability statements for `core` and
   `core-runtime`.
 
+- **[planning/naming]** [Package Rename Stage 0 Decision v1](package-rename-stage-0-decision-v1.md)  
+  Stage 0 naming decision record defining final naming targets, compatibility
+  strategy, and first implementation slice for the package-rename track.
+
 - **[historical/dev-log]** [CoreConfiguration to Positioned Market Contract](coreconfiguration-positioned-market-contract.md)  
   Historical closure contract for positioned canonical `MarketEvent`
   configuration-path and validation behavior in `core`.
