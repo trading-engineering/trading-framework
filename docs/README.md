@@ -21,6 +21,10 @@ semantics.
   runtime execution feedback emission (including `FillEvent`), while preserving
   current compatibility projection behavior.
 
+- **[boundary/source-contract]** [Runtime/Adapter Execution Feedback Source Contract v1](runtime-adapter-execution-feedback-source-contract-v1.md)  
+  Source-authority boundary contract defining eligibility, authority, ordering,
+  and no-double-counting requirements before canonical `FillEvent` ingress.
+
 - **[boundary/implemented-transition]** [OrderSubmittedEvent / Dispatch Boundary Contract v1](order-submitted-event-contract-v1.md)  
   Implemented-transition boundary contract for dispatch-time canonical
   order-entry semantics and coexistence constraints around `Submitted` authority.
