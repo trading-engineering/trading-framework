@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from trading_framework.core.domain.event_model import (
+from tradingchassis_core.core.domain.event_model import (
     CANONICAL_EVENT_CATEGORY_NAMES,
     COMPATIBILITY_PROJECTION_TYPES,
     NON_CANONICAL_CONTROL_HELPER_TYPES,
@@ -11,26 +11,26 @@ from trading_framework.core.domain.event_model import (
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
 )
-from trading_framework.core.domain.processing import process_canonical_event
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.processing import process_canonical_event
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
     OrderSubmittedEvent,
 )
-from trading_framework.core.events.event_bus import EventBus
-from trading_framework.core.events.events import (
+from tradingchassis_core.core.events.event_bus import EventBus
+from tradingchassis_core.core.events.events import (
     DerivedFillEvent,
     DerivedPnLEvent,
     ExposureDerivedEvent,
     OrderStateTransitionEvent,
     RiskDecisionEvent,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
-from trading_framework.core.execution_control.types import ControlSchedulingObligation
-from trading_framework.core.risk.risk_engine import GateDecision
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
+from tradingchassis_core.core.risk.risk_engine import GateDecision
 
 
 def test_canonical_event_category_names_are_stable() -> None:

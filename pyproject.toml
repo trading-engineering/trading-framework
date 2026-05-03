@@ -39,7 +39,7 @@ dev = [
 # Explicit package discovery
 # --------------------------------------------------
 [tool.setuptools.packages.find]
-include = ["trading_framework*"]
+include = ["tradingchassis_core*", "trading_framework*"]
 
 # --------------------------------------------------
 # Pytest
@@ -75,15 +75,15 @@ ignore_errors = true
 # Import Linter
 # --------------------------------------------------
 [tool.importlinter]
-root_package = "trading_framework"
+root_package = "tradingchassis_core"
 include_external_packages = true
 
 # Core stays pure
 [[tool.importlinter.contracts]]
 name = "Core must be pure"
 type = "forbidden"
-source_modules = ["trading_framework.core"]
+source_modules = ["tradingchassis_core.core"]
 forbidden_modules = [
-  "trading_framework.strategies"
+  "tradingchassis_core.strategies"
 ]
 

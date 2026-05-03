@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trading_framework.core.events.event_bus import EventBus
+from tradingchassis_core.core.events.event_bus import EventBus
 
 
 class _NullSink:

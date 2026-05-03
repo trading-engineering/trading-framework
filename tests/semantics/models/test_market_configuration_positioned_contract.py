@@ -12,22 +12,22 @@ from pathlib import Path
 
 import pytest
 
-from trading_framework.core.domain.configuration import CoreConfiguration
-from trading_framework.core.domain.processing import (
+from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.processing import (
     fold_event_stream_entries,
     process_canonical_event,
     process_event_entry,
 )
-from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     FillEvent,
     MarketEvent,
     OrderStateEvent,
     Price,
     Quantity,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 
 
 def _book_market_event(
@@ -371,7 +371,7 @@ def test_order_state_event_remains_compatibility_only() -> None:
 def test_positioned_market_contract_does_not_import_runtime_configuration_mapping() -> None:
     """Guardrail: canonical market reducer contract stays CoreConfiguration-only."""
     repo_root = Path(__file__).resolve().parents[3]
-    processing_path = repo_root / "trading_framework/core/domain/processing.py"
+    processing_path = repo_root / "tradingchassis_core/core/domain/processing.py"
     tree = ast.parse(processing_path.read_text(encoding="utf-8"), filename=str(processing_path))
 
     forbidden_modules = (

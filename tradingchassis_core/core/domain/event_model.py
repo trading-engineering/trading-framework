@@ -12,21 +12,21 @@ from __future__ import annotations
 
 from enum import Enum
 
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.types import (
     ControlTimeEvent,
     FillEvent,
     MarketEvent,
     OrderStateEvent,
     OrderSubmittedEvent,
 )
-from trading_framework.core.events.events import (
+from tradingchassis_core.core.events.events import (
     DerivedFillEvent,
     DerivedPnLEvent,
     ExposureDerivedEvent,
     OrderStateTransitionEvent,
     RiskDecisionEvent,
 )
-from trading_framework.core.execution_control.types import ControlSchedulingObligation
+from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
 
 
 class CanonicalEventCategory(str, Enum):

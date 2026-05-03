@@ -18,15 +18,15 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Iterable
 
-from trading_framework.core.domain.order_lifecycle import (
+from tradingchassis_core.core.domain.order_lifecycle import (
     is_valid_canonical_order_transition,
     normalize_compatibility_state_to_canonical,
 )
-from trading_framework.core.domain.order_state_machine import is_valid_transition
-from trading_framework.core.domain.processing_order import ProcessingPosition
-from trading_framework.core.domain.slots import SlotKey, stable_slot_order_id
-from trading_framework.core.domain.types import OrderStateEvent
-from trading_framework.core.events.events import (
+from tradingchassis_core.core.domain.order_state_machine import is_valid_transition
+from tradingchassis_core.core.domain.processing_order import ProcessingPosition
+from tradingchassis_core.core.domain.slots import SlotKey, stable_slot_order_id
+from tradingchassis_core.core.domain.types import OrderStateEvent
+from tradingchassis_core.core.events.events import (
     DerivedFillEvent,
     DerivedPnLEvent,
     ExposureDerivedEvent,
@@ -34,14 +34,14 @@ from trading_framework.core.events.events import (
 )
 
 if TYPE_CHECKING:
-    from trading_framework.core.domain.types import (
+    from tradingchassis_core.core.domain.types import (
         ControlTimeEvent,
         FillEvent,
         NewOrderIntent,
         OrderIntent,
         OrderSubmittedEvent,
     )
-    from trading_framework.core.events.event_bus import EventBus
+    from tradingchassis_core.core.events.event_bus import EventBus
 
 
 # ---------------------------------------------------------------------------

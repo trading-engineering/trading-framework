@@ -6,17 +6,17 @@ This pins current behavior that hard rejects do not mutate StrategyState.queued_
 
 from __future__ import annotations
 
-from trading_framework.core.domain.reject_reasons import RejectReason
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.reject_reasons import RejectReason
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     NewOrderIntent,
     NotionalLimits,
     Price,
     Quantity,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
-from trading_framework.core.risk.risk_config import RiskConfig
-from trading_framework.core.risk.risk_engine import RiskEngine
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.risk.risk_config import RiskConfig
+from tradingchassis_core.core.risk.risk_engine import RiskEngine
 
 
 def test_trading_disabled_rejects_new_without_queue_side_effects_characterization() -> None:

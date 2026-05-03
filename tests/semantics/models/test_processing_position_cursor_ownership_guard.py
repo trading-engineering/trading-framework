@@ -5,8 +5,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-_ALLOWED_CALLER = Path("trading_framework/core/domain/processing.py")
-_ALLOWED_MUTATION_FILE = Path("trading_framework/core/domain/state.py")
+_ALLOWED_CALLER = Path("tradingchassis_core/core/domain/processing.py")
+_ALLOWED_MUTATION_FILE = Path("tradingchassis_core/core/domain/state.py")
 _TARGET_METHOD = "_advance_processing_position"
 _TARGET_ATTR = "_last_processing_position_index"
 _POSITIONED_MARKET_TARGET_METHOD = "_update_market_from_positioned_canonical_event"
@@ -71,7 +71,7 @@ def _find_target_attr_mutations(path: Path) -> list[tuple[int, int]]:
 
 def test_processing_position_cursor_is_mutated_only_via_canonical_boundary() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    production_root = repo_root / "trading_framework"
+    production_root = repo_root / "tradingchassis_core"
 
     call_violations: list[str] = []
     mutation_violations: list[str] = []
@@ -105,7 +105,7 @@ def test_processing_position_cursor_is_mutated_only_via_canonical_boundary() -> 
 
 def test_positioned_market_helper_is_called_only_via_canonical_boundary() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    production_root = repo_root / "trading_framework"
+    production_root = repo_root / "tradingchassis_core"
 
     call_violations: list[str] = []
 

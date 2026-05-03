@@ -7,15 +7,15 @@ order lifecycle projection that begins at dispatch/submission.
 
 from __future__ import annotations
 
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     NewOrderIntent,
     OrderStateEvent,
     OrderSubmittedEvent,
     Price,
     Quantity,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 
 
 def _new_intent(instrument: str, client_order_id: str, *, ts_ns_local: int) -> NewOrderIntent:

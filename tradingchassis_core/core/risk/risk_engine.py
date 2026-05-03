@@ -6,18 +6,18 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from trading_framework.core.domain.reject_reasons import RejectReason
-from trading_framework.core.domain.types import OrderIntent, RiskConstraints
-from trading_framework.core.events.events import RiskDecisionEvent
-from trading_framework.core.execution_control import ExecutionControl
-from trading_framework.core.ports.venue_policy import VenuePolicy
-from trading_framework.core.risk.risk_policy import RiskPolicy
+from tradingchassis_core.core.domain.reject_reasons import RejectReason
+from tradingchassis_core.core.domain.types import OrderIntent, RiskConstraints
+from tradingchassis_core.core.events.events import RiskDecisionEvent
+from tradingchassis_core.core.execution_control import ExecutionControl
+from tradingchassis_core.core.ports.venue_policy import VenuePolicy
+from tradingchassis_core.core.risk.risk_policy import RiskPolicy
 
 if TYPE_CHECKING:
     from risk.risk_config import RiskConfig
 
-    from trading_framework.core.domain.state import StrategyState
-    from trading_framework.core.events.event_bus import EventBus
+    from tradingchassis_core.core.domain.state import StrategyState
+    from tradingchassis_core.core.events.event_bus import EventBus
 
 
 # ---------------------------------------------------------------------------

@@ -17,15 +17,15 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping
 
-from trading_framework.core.domain.configuration import CoreConfiguration
-from trading_framework.core.domain.event_model import (
+from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.event_model import (
     CanonicalEventCategory,
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
 )
-from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     ControlTimeEvent,
     FillEvent,
     MarketEvent,

@@ -8,12 +8,15 @@ import inspect
 
 import pytest
 
-from trading_framework.core.domain.configuration import CoreConfiguration
-from trading_framework.core.domain.event_model import is_canonical_stream_candidate_type
-from trading_framework.core.domain.processing import fold_event_stream_entries, process_event_entry
-from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.event_model import is_canonical_stream_candidate_type
+from tradingchassis_core.core.domain.processing import (
+    fold_event_stream_entries,
+    process_event_entry,
+)
+from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     ControlTimeEvent,
     FillEvent,
     MarketEvent,
@@ -22,8 +25,8 @@ from trading_framework.core.domain.types import (
     Price,
     Quantity,
 )
-from trading_framework.core.events.event_bus import EventBus
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.events.event_bus import EventBus
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 
 
 def _book_market_event(*, instrument: str, ts_ns_local: int, ts_ns_exch: int) -> MarketEvent:

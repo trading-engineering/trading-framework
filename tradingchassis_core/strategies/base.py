@@ -11,10 +11,10 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from trading_framework.core.domain.state import StrategyState
-    from trading_framework.core.domain.types import MarketEvent, OrderIntent, RiskConstraints
-    from trading_framework.core.ports.engine_context import EngineContext
-    from trading_framework.core.risk.risk_engine import GateDecision
+    from tradingchassis_core.core.domain.state import StrategyState
+    from tradingchassis_core.core.domain.types import MarketEvent, OrderIntent, RiskConstraints
+    from tradingchassis_core.core.ports.engine_context import EngineContext
+    from tradingchassis_core.core.risk.risk_engine import GateDecision
 
 
 class Strategy(ABC):

@@ -5,12 +5,12 @@ echo "🔍 Running import-linter..."
 lint-imports --verbose
 
 echo "⚡ Running ruff (check only)..."
-ruff check trading_framework tests
+ruff check tradingchassis_core trading_framework tests
 
 echo "🧠 Running mypy..."
-mypy trading_framework tests
+mypy tradingchassis_core trading_framework tests
 
 echo "🧪 Running pytest..."
-pytest
+python -m pytest
 
 echo "✅ All checks passed!"

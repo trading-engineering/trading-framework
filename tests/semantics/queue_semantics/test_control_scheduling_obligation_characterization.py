@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     CancelOrderIntent,
     NewOrderIntent,
     NotionalLimits,
@@ -12,10 +12,10 @@ from trading_framework.core.domain.types import (
     Price,
     Quantity,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
-from trading_framework.core.execution_control import ExecutionControl
-from trading_framework.core.risk.risk_config import RiskConfig
-from trading_framework.core.risk.risk_engine import RiskEngine
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.execution_control import ExecutionControl
+from tradingchassis_core.core.risk.risk_config import RiskConfig
+from tradingchassis_core.core.risk.risk_engine import RiskEngine
 
 
 def test_rate_limited_mixed_intents_keep_minimum_next_send_timestamp() -> None:

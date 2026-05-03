@@ -14,12 +14,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
-from trading_framework.core.domain.reject_reasons import RejectReason
-from trading_framework.core.domain.types import NewOrderIntent, OrderIntent
-from trading_framework.core.execution_control.types import ControlSchedulingObligation
+from tradingchassis_core.core.domain.reject_reasons import RejectReason
+from tradingchassis_core.core.domain.types import NewOrderIntent, OrderIntent
+from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
 
 if TYPE_CHECKING:
-    from trading_framework.core.domain.state import StrategyState
+    from tradingchassis_core.core.domain.state import StrategyState
 
 
 @dataclass(slots=True)

@@ -10,15 +10,15 @@ This suite is intentionally explicit and should not be interpreted as desired se
 
 from __future__ import annotations
 
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     CancelOrderIntent,
     NewOrderIntent,
     Price,
     Quantity,
     ReplaceOrderIntent,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 
 
 def test_pop_queued_intents_orders_by_priority_then_fifo_characterization() -> None:

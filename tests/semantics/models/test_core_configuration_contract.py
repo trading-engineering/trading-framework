@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from trading_framework.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.configuration import CoreConfiguration
 
 
 def test_same_version_and_semantic_payload_produce_same_fingerprint() -> None:

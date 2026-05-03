@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-_ALLOWED_CALLER = Path("trading_framework/core/domain/processing.py")
+_ALLOWED_CALLER = Path("tradingchassis_core/core/domain/processing.py")
 _TARGET_METHODS = frozenset(
     {
         "update_market",
@@ -39,7 +39,7 @@ def _find_target_calls(path: Path) -> list[tuple[int, int, str]]:
 
 def test_direct_reducer_calls_are_limited_to_canonical_processing_boundary() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    production_root = repo_root / "trading_framework"
+    production_root = repo_root / "tradingchassis_core"
 
     violations: list[str] = []
 

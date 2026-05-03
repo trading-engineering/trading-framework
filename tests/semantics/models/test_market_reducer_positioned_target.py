@@ -12,18 +12,18 @@ import copy
 
 import pytest
 
-from trading_framework.core.domain.configuration import CoreConfiguration
-from trading_framework.core.domain.processing import process_canonical_event
-from trading_framework.core.domain.processing_order import ProcessingPosition
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.processing import process_canonical_event
+from tradingchassis_core.core.domain.processing_order import ProcessingPosition
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     FillEvent,
     MarketEvent,
     OrderStateEvent,
     Price,
     Quantity,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 
 
 def _market_configuration(

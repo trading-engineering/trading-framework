@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from trading_framework.core.events.event_sink import EventSink
+from tradingchassis_core.core.events.event_sink import EventSink
 
 
 class EventBus:
