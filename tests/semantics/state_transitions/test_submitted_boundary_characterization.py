@@ -179,6 +179,22 @@ def test_mark_intent_sent_new_creates_canonical_submitted_projection() -> None:
     assert projection.updated_ts_ns_local == 300
 
 
+def test_mark_intent_sent_new_does_not_advance_processing_position_cursor() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-cursor-guard-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    assert state._last_processing_position_index is None
+
+    state.update_timestamp(301)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    # mark_intent_sent sidecar behavior remains available without canonical entry metadata.
+    assert state.canonical_orders[(instrument, client_order_id)].state == "submitted"
+    assert state.has_inflight(instrument, client_order_id)
+    assert state._last_processing_position_index is None
+
+
 def test_order_submitted_event_creates_projection_without_mark_intent_sent() -> None:
     instrument = "BTC-USDC-PERP"
     client_order_id = "order-stream-submitted-1"
@@ -552,3 +568,52 @@ def test_expired_does_not_introduce_canonical_expired_state() -> None:
     assert projection.state == "submitted"
     assert projection.updated_ts_ns_local == 1200
     assert client_order_id not in state.orders.get(instrument, {})
+
+
+def test_snapshot_fill_progression_does_not_mutate_canonical_fill_reducer_buckets() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "order-snapshot-fill-guard-1"
+    state = StrategyState(event_bus=NullEventBus())
+
+    state.update_timestamp(1300)
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="new")
+
+    first_partial = _order_state_event(
+        instrument,
+        client_order_id,
+        ts_ns_local=1310,
+        ts_ns_exch=1310,
+        state_type="partially_filled",
+    ).model_copy(
+        update={
+            "filled_price": Price(currency="USDC", value=100.25),
+            "cum_filled_qty": Quantity(unit="contracts", value=0.25),
+            "remaining_qty": Quantity(unit="contracts", value=0.75),
+        }
+    )
+    second_partial = _order_state_event(
+        instrument,
+        client_order_id,
+        ts_ns_local=1320,
+        ts_ns_exch=1320,
+        state_type="partially_filled",
+    ).model_copy(
+        update={
+            "filled_price": Price(currency="USDC", value=100.50),
+            "cum_filled_qty": Quantity(unit="contracts", value=0.50),
+            "remaining_qty": Quantity(unit="contracts", value=0.50),
+        }
+    )
+
+    state.apply_order_state_event(first_partial)
+    state.apply_order_state_event(second_partial)
+
+    # Compatibility snapshot/projection path remains active.
+    assert state.orders[instrument][client_order_id].state_type == "partially_filled"
+    assert state.orders[instrument][client_order_id].cum_filled_qty == 0.50
+    assert state.canonical_orders[(instrument, client_order_id)].state == "submitted"
+    assert state.canonical_orders[(instrument, client_order_id)].updated_ts_ns_local == 1300
+
+    # Snapshot progression must not mutate canonical FillEvent reducer buckets.
+    assert state.fills == {}
+    assert state.fill_cum_qty == {}

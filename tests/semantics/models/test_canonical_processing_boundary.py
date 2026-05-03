@@ -8,8 +8,8 @@ import pytest
 
 from trading_framework.core.domain.configuration import CoreConfiguration
 from trading_framework.core.domain.event_model import is_canonical_stream_candidate_type
-from trading_framework.core.domain.processing import process_canonical_event
-from trading_framework.core.domain.processing_order import ProcessingPosition
+from trading_framework.core.domain.processing import process_canonical_event, process_event_entry
+from trading_framework.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from trading_framework.core.domain.state import StrategyState
 from trading_framework.core.domain.types import (
     ControlTimeEvent,
@@ -21,7 +21,7 @@ from trading_framework.core.domain.types import (
     Quantity,
 )
 from trading_framework.core.events.event_bus import EventBus
-from trading_framework.core.events.events import RiskDecisionEvent
+from trading_framework.core.events.events import DerivedFillEvent, RiskDecisionEvent
 from trading_framework.core.events.sinks.null_event_bus import NullEventBus
 
 
@@ -796,6 +796,26 @@ def test_process_canonical_event_rejects_order_state_event_with_processing_posit
 
     with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
         process_canonical_event(state, event, position=position)
+
+
+def test_process_event_entry_rejects_derived_fill_event() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    event = DerivedFillEvent(
+        ts_ns_local=300,
+        instrument="BTC-USDC-PERP",
+        client_order_id="order-compat-derived-1",
+        side="buy",
+        delta_qty=0.25,
+        cum_qty=0.25,
+        price=100.0,
+    )
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=21),
+        event=event,
+    )
+
+    with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
+        process_event_entry(state, entry)
 
 
 def test_process_canonical_event_rejects_telemetry_record() -> None:

@@ -139,3 +139,25 @@ def test_process_canonical_event_rejects_order_state_event_guard() -> None:
     else:
         raise AssertionError("Expected process_canonical_event to reject OrderStateEvent")
 
+
+def test_process_canonical_event_rejects_derived_fill_event_guard() -> None:
+    """Canonical processing boundary rejects compatibility DerivedFillEvent records."""
+
+    state = StrategyState(event_bus=NullEventBus())
+    compatibility_record = DerivedFillEvent(
+        ts_ns_local=1,
+        instrument="BTC-USDC-PERP",
+        client_order_id="compat-derived-1",
+        side="buy",
+        delta_qty=0.1,
+        cum_qty=0.1,
+        price=100.5,
+    )
+
+    try:
+        process_canonical_event(state, compatibility_record)
+    except TypeError as exc:
+        assert "Unsupported non-canonical event type" in str(exc)
+    else:
+        raise AssertionError("Expected process_canonical_event to reject DerivedFillEvent")
+
