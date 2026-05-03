@@ -421,3 +421,201 @@ fill progression for the same canonical order progression.
 and canonical runtime `FillEvent` ingress stays deferred.
 
 ---
+
+## Appendix B: Adapter API capability contract (Phase 4F)
+
+This appendix defines a docs-only adapter API capability contract for future
+execution-feedback sources.
+
+This appendix is contract-only:
+
+- it does not add or implement production adapter APIs;
+- it does not modify runtime behavior;
+- it does not implement canonical `FillEvent` ingress;
+- it does not canonicalize `OrderStateEvent`;
+- it does not change `DerivedFillEvent` or snapshot compatibility behavior;
+- it does not change reducers or event taxonomy;
+- it does not implement replay/storage/`ProcessingContext`/`EventStreamCursor`.
+
+`RAEFSC-79` - This appendix defines the future adapter-facing capability
+contract for authoritative `ExecutionFeedbackRecord` sourcing only.
+
+`RAEFSC-80` - Current runtime remains ineligible for canonical `FillEvent`
+ingress under this source-authority contract.
+
+`RAEFSC-81` - Snapshot-derived compatibility projection remains the active
+semantic authority in this phase (`DerivedFillEvent` and snapshot path
+unchanged).
+
+`RAEFSC-82` - Canonical runtime `FillEvent` ingress remains deferred.
+
+---
+
+### B.1 Ownership and boundary contract
+
+`RAEFSC-83` - The execution-feedback source capability belongs to the
+venue-side adapter boundary.
+
+`RAEFSC-84` - Existing execution command submission boundary remains outbound
+only; it is not redefined by this appendix.
+
+`RAEFSC-85` - Runner remains responsible for orchestration and global
+`ProcessingPosition` merge policy at the canonical boundary.
+
+`RAEFSC-86` - Adapter/source capability must not mutate `StrategyState`
+directly.
+
+`RAEFSC-87` - Adapter/source capability must not emit canonical events directly
+and must not call canonical processing entry points.
+
+---
+
+### B.2 Conceptual capability interface (docs only)
+
+`RAEFSC-88` - Future conceptual interface name is
+`ExecutionFeedbackRecordSource`.
+
+`RAEFSC-89` - Conceptual method:
+`drain_execution_feedback_records() -> Sequence[ExecutionFeedbackRecord]`.
+
+`RAEFSC-90` - `drain_execution_feedback_records` is non-blocking.
+
+`RAEFSC-91` - When no records are available, the method returns an empty
+sequence.
+
+`RAEFSC-92` - Already-drained records must not be returned again.
+
+`RAEFSC-93` - Records returned by one drain call must be in deterministic
+source acceptance order.
+
+`RAEFSC-94` - This interface remains conceptual documentation only in Phase 4F
+and introduces no code API additions.
+
+---
+
+### B.3 source_sequence requirements
+
+`RAEFSC-95` - `source_sequence` must be strictly monotone within the source
+stream.
+
+`RAEFSC-96` - `source_sequence` must be deterministic for replay-equivalent
+inputs and configuration.
+
+`RAEFSC-97` - `source_sequence` must not be derived from timestamps.
+
+`RAEFSC-98` - Duplicate or regressing `source_sequence` values are hard
+contract failures.
+
+`RAEFSC-99` - `source_sequence` semantics must be suitable for deterministic
+runner merge policy into global `ProcessingPosition`.
+
+---
+
+### B.4 Error semantics contract
+
+`RAEFSC-100` - Missing required authoritative fields for
+`ExecutionFeedbackRecord` are hard contract failures.
+
+`RAEFSC-101` - Non-monotone `source_sequence` is a hard contract failure.
+
+`RAEFSC-102` - Invalid liquidity semantics relative to A.3 are hard contract
+failures.
+
+`RAEFSC-103` - Unresolved canonical correlation relative to A.4 is a hard
+contract failure.
+
+`RAEFSC-104` - Malformed authoritative records must not be silently dropped.
+
+---
+
+### B.5 Runtime loop integration contract (future implementation boundary)
+
+`RAEFSC-105` - Future runner integration may perform at most one non-blocking
+feedback drain per wakeup after timestamp adoption and before rc-specific
+branch processing.
+
+`RAEFSC-106` - Feedback draining is orthogonal to rc-specific market (`rc == 2`)
+and snapshot/order-response (`rc == 3`) branches.
+
+`RAEFSC-107` - Current market and snapshot branch behavior remains unchanged
+until a later explicit implementation phase.
+
+`RAEFSC-108` - Drained execution-feedback records are source records only and do
+not directly mutate state until mapped to canonical boundary events by the
+runner.
+
+`RAEFSC-109` - Global `ProcessingPosition` assignment for canonical merge
+remains runner responsibility.
+
+---
+
+### B.6 FillEvent mapping boundary contract
+
+`RAEFSC-110` - Adapter/source provides `ExecutionFeedbackRecord` only.
+
+`RAEFSC-111` - Runner maps eligible records to canonical `FillEvent` at a later
+implementation phase.
+
+`RAEFSC-112` - Adapter/source must not construct canonical `FillEvent`.
+
+`RAEFSC-113` - Adapter/source must not invoke canonical `process_event_entry`.
+
+`RAEFSC-114` - `liquidity_flag` must come from source records only under A.3.
+
+`RAEFSC-115` - Synthetic population of required canonical mapping fields is
+prohibited.
+
+---
+
+### B.7 No-double-counting and cutover contract
+
+`RAEFSC-116` - First implementation path should be shadow-only unless a
+separate explicit cutover decision is approved.
+
+`RAEFSC-117` - During shadow-only operation, `DerivedFillEvent` and snapshot
+compatibility path remain semantic authority.
+
+`RAEFSC-118` - Authority cutover by source scope requires explicit subsequent
+decision and test-backed reconciliation rules.
+
+`RAEFSC-119` - Duplicate semantic progression key must include at least
+`instrument`, `client_order_id`, and `cum_filled_qty`.
+
+---
+
+### B.8 Test obligations before implementation
+
+`RAEFSC-120` - Adapter contract tests are required.
+
+`RAEFSC-121` - Deterministic `source_sequence` tests are required.
+
+`RAEFSC-122` - Drain idempotence tests are required.
+
+`RAEFSC-123` - Mapping contract tests are required.
+
+`RAEFSC-124` - No-double-counting shadow tests are required.
+
+`RAEFSC-125` - Runtime global merge ordering tests are required.
+
+`RAEFSC-126` - Snapshot and `DerivedFillEvent` regression guards are required.
+
+---
+
+### B.9 Explicitly out of scope for Phase 4F
+
+`RAEFSC-127` - Code interface addition.
+
+`RAEFSC-128` - hftbacktest or other adapter implementation work.
+
+`RAEFSC-129` - Runtime canonical `FillEvent` ingress implementation.
+
+`RAEFSC-130` - Reducer changes.
+
+`RAEFSC-131` - `OrderStateEvent` canonicalization.
+
+`RAEFSC-132` - `DerivedFillEvent` removal or behavior change.
+
+`RAEFSC-133` - Replay/storage/`EventStreamCursor`/`ProcessingContext`
+implementation.
+
+---
