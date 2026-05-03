@@ -1,10 +1,10 @@
 # TradingChassis – Core
 
-![CI](https://github.com/trading-engineering/trading-framework/actions/workflows/tests.yaml/badge.svg)
+![CI](https://github.com/TradingChassis/core/actions/workflows/tests.yaml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Deterministic, event-driven core framework for trading engineering,
+Deterministic, event-driven core for TradingChassis infrastructure project,
 built on top of [hftbacktest](https://github.com/nkaz001/hftbacktest), and extended with
 explicit risk management, order state machines, queue semantics, and research orchestration.
 

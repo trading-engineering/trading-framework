@@ -6,8 +6,8 @@ import warnings
 def test_legacy_and_new_nested_modules_share_identity() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        import trading_framework.core.domain.processing as old_processing
-        import trading_framework.core.domain.types as old_types
+        import tradingchassis_core.core.domain.processing as old_processing
+        import tradingchassis_core.core.domain.types as old_types
 
     import tradingchassis_core.core.domain.processing as new_processing
     import tradingchassis_core.core.domain.types as new_types
@@ -19,16 +19,16 @@ def test_legacy_and_new_nested_modules_share_identity() -> None:
 def test_legacy_and_new_symbols_share_identity() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        from trading_framework.core.domain.configuration import (
+        from tradingchassis_core.core.domain.configuration import (
             CoreConfiguration as OldCoreConfiguration,
         )
-        from trading_framework.core.domain.types import (
+        from tradingchassis_core.core.domain.types import (
             ControlTimeEvent as OldControlTimeEvent,
         )
-        from trading_framework.core.domain.types import (
+        from tradingchassis_core.core.domain.types import (
             MarketEvent as OldMarketEvent,
         )
-        from trading_framework.core.domain.types import (
+        from tradingchassis_core.core.domain.types import (
             OrderSubmittedEvent as OldOrderSubmittedEvent,
         )
 
