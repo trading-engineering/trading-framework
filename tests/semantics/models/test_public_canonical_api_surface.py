@@ -1,3 +1,5 @@
+"""Public import-surface contract for canonical core processing APIs."""
+
 from __future__ import annotations
 
 import tradingchassis_core as tc
