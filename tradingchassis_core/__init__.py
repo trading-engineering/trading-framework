@@ -8,6 +8,16 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.processing import (
+    fold_event_stream_entries,
+    process_event_entry,
+)
+from tradingchassis_core.core.domain.processing_order import (
+    EventStreamEntry,
+    ProcessingPosition,
+)
+
 # ----------------------------------------------------------------------
 # Backtest Engine API
 # ----------------------------------------------------------------------
@@ -73,6 +83,11 @@ __all__ = [
     "stable_slot_order_id",
     "EngineContext",
     "GateDecision",
+    "CoreConfiguration",
+    "ProcessingPosition",
+    "EventStreamEntry",
+    "process_event_entry",
+    "fold_event_stream_entries",
 
     # Version
     "__version__",
