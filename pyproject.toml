@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "trading-framework"
+name = "tradingchassis-core"
 version = "0.1.0"
-description = "Deterministic, event-driven core framework, with explicit risk management, order state machines, queue semantics, and research orchestration."
+description = "Deterministic, event-driven core, with explicit risk management, order state machines, queue semantics, and research orchestration."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "tradingeng@protonmail.com" }]
@@ -20,15 +20,6 @@ classifiers = [
 
 dependencies = [
   "pydantic>=2,<3",
-  "ujson>=5,<6",
-  "tqdm>=4,<5",
-  "pyarrow>=16.0,<17",
-  "oci>=2,<3",
-  "hftbacktest>=2,<3",
-  "numpy>=2.0,<2.3",
-  "jsonschema>=4,<5",
-  "mlflow>=3,<4",
-  "prometheus-client>=0.24,<1"
 ]
 
 [project.optional-dependencies]
@@ -36,14 +27,19 @@ dev = [
   "pytest>=9,<10",
   "import-linter>=1.11,<2",
   "ruff>=0.4,<1",
-  "mypy>=1.9,<2"
+  "mypy>=1.9,<2",
+  "hftbacktest>=2,<3",
+  "jsonschema>=4,<5",
+  "matplotlib>=3,<4",
+  "numpy>=2.0,<2.3",
+  "referencing>=0.37,<1",
 ]
 
 # --------------------------------------------------
 # Explicit package discovery
 # --------------------------------------------------
 [tool.setuptools.packages.find]
-include = ["trading_framework*"]
+include = ["tradingchassis_core*"]
 
 # --------------------------------------------------
 # Pytest
@@ -79,39 +75,15 @@ ignore_errors = true
 # Import Linter
 # --------------------------------------------------
 [tool.importlinter]
-root_package = "trading_framework"
+root_package = "tradingchassis_core"
 include_external_packages = true
 
 # Core stays pure
 [[tool.importlinter.contracts]]
 name = "Core must be pure"
 type = "forbidden"
-source_modules = ["trading_framework.core"]
+source_modules = ["tradingchassis_core.core"]
 forbidden_modules = [
-  "trading_framework.live",
-  "trading_framework.backtest",
-  "trading_framework.strategies"
+  "tradingchassis_core.strategies"
 ]
 
-# Strategies use core only
-[[tool.importlinter.contracts]]
-name = "Strategies may depend on core only"
-type = "forbidden"
-source_modules = ["trading_framework.strategies"]
-forbidden_modules = [
-  "trading_framework.live",
-  "trading_framework.backtest"
-]
-
-# Environments must not mix
-[[tool.importlinter.contracts]]
-name = "Live and backtest must not mix"
-type = "forbidden"
-source_modules = ["trading_framework.live"]
-forbidden_modules = ["trading_framework.backtest"]
-
-[[tool.importlinter.contracts]]
-name = "Backtest must not depend on live"
-type = "forbidden"
-source_modules = ["trading_framework.backtest"]
-forbidden_modules = ["trading_framework.live"]

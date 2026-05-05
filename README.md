@@ -1,320 +1,192 @@
-# Trading Framework
+# TradingChassis — Core
 
-![CI](https://github.com/trading-engineering/trading-framework/actions/workflows/tests.yaml/badge.svg)
+![CI](https://github.com/TradingChassis/core/actions/workflows/tests.yaml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Deterministic, event-driven core framework for trading engineering,
-built on top of [hftbacktest](https://github.com/nkaz001/hftbacktest), and extended with
-explicit risk management, order state machines, queue semantics, and research orchestration.
+Deterministic semantic Core library for TradingChassis.
+
+This repository provides the reusable Core package (`tradingchassis_core`) that defines
+event-driven processing semantics, state derivation boundaries, strategy interfaces, risk policy
+contracts, and execution control primitives.
 
 ---
 
-## 🧠 What is this?
+## Overview
 
-This project wraps the open-source `hftbacktest` engine and extends it
-into a structured trading framework.
+Core is a library, not a runtime shell.
 
-While `hftbacktest` provides a high-performance event-driven simulation
-core, this framework adds the missing layers required for realistic
-research and strategy development:
-
-- Explicit order state machine
-- Risk engine with enforceable constraints
-- Queue and rate-limit semantics
-- Venue abstraction (backtest + live ready)
-- Deterministic execution guarantees
-- Experiment orchestration (segments, sweeps)
-- Schema-validated domain events
-
-The result is a layered trading architecture.
+- Canonical processing model: Event Stream + Configuration -> derived State
+- Explicit Strategy, Risk Engine, and Execution Control boundaries
+- Deterministic behavior under identical Event Stream and Configuration
+- Runtime environments consume this package and provide integration wiring
 
 ---
 
-## 🧩 What does it solve?
+## What Core is
 
-Backtesting setups tend to:
+Core provides:
 
-- Ignore realistic order lifecycle behavior
-- Have no explicit risk enforcement
-- Mix strategy logic with execution logic
-- Lack deterministic event modeling
-- Do not scale to research workflows
-
-This framework solves those problems by introducing:
-
-- Clear domain boundaries
-- Explicit state transitions
-- Risk-first execution gating
-- Deterministic event pipelines
-- Research-grade orchestration
-
-It enables realistic simulation while remaining extensible toward live
-trading.
+- semantic/domain types and value models
+- processing-order and state-derivation primitives
+- risk-policy interfaces and enforcement boundaries
+- execution-control abstractions
+- strategy interfaces for emitting Intents from derived State
 
 ---
 
-## 🏗 Architecture Overview
+## What Core is not
 
-The system is structured into clear layers with every layer being
-exchangeable:
+Core does not provide:
 
-Strategy\
-↓\
-Risk Engine\
-↓\
-Venue Abstraction\
-↓\
-Backtest or Execution Engine
+- local/cluster runtime entrypoints
+- Kubernetes or Argo orchestration
+- runtime image/deployment plumbing
+- full runtime ingress, replay, or storage infrastructure
 
-Internally:
-
-- `hftbacktest` remains timestamp-atomic and event-driven.
-- The strategy layer operates state-based per timestamp.
-- The runner orchestrates event processing deterministically.
-
-Core modules:
-
-- `core/` -- domain models, state machine, risk engine, events
-- `backtest/` -- engine adapters, orchestration, runtime entrypoints
-- `strategies/` -- base strategy interfaces
-- `live/` -- live adapters (work in progress)
-- `examples/` -- minimal runnable setups
-- `tests/` -- semantic invariant validation
-- `scripts/` -- development helper scripts
+Those responsibilities live in Core Runtime (`core-runtime`).
 
 ---
 
-## 🚀 Quickstart
+## Current semantic status
 
-Minimal local example: `examples/local/backtest.py`\
-Runs entirely locally using bundled or synthetic example data.\
-No S3, cloud storage or live connectivity required.
+The transitional semantic upgrade milestone is closed.
 
-### Option 1 --- Recommended: Dev Container
+Core remains the canonical semantic library, and current runtime usage focuses on canonical
+`MarketEvent`, `OrderSubmittedEvent`, and `ControlTimeEvent` paths.
 
-A reproducible development environment is provided via a dev container.
+Compatibility/deferred runtime capabilities still exist and are intentionally not described here as
+fully complete canonical coverage.
+
+---
+
+## Key concepts
+
+Terminology follows `docs/docs/00-guides/terminology.md`:
+
+- Event
+- Event Stream
+- Processing Order
+- Configuration
+- State
+- Intent
+- Risk Engine
+- Queue
+- Queue Processing
+- Execution Control
+- Order
+- Core
+- Runtime
+- Venue Adapter
+
+---
+
+## Canonical boundary
+
+Core guarantees deterministic semantics and reusable contracts.
+
+Runtimes supply environment-specific concerns such as:
+
+- ingress wiring
+- adapter implementations
+- orchestration entrypoints
+- persistence/replay infrastructure
+
+---
+
+## Canonical vs compatibility artifacts
+
+At the Core level:
+
+- Canonical artifacts are semantic models and deterministic processing contracts
+- Compatibility artifacts are transitional runtime-facing paths maintained for migration parity
+
+The runtime-level capability matrix is documented in `core-runtime/README.md`.
+
+---
+
+## Package and import names
+
+- Human-facing concept name: Core
+- Distribution/project name: `tradingchassis-core`
+- Python import package: `tradingchassis_core`
+
+Install:
 
 ```bash
-git clone https://github.com/trading-engineering/trading-framework
-cd trading-framework
+python -m pip install -e .
 ```
 
-Open in an IDE supporting Dev Containers (e.g. VS Code), reopen in
-container, then:
+Install with dev extras:
 
 ```bash
-python examples/local/backtest.py --config examples/local/local.json
+python -m pip install -e ".[dev]"
 ```
 
-No manual `pip install` required inside the container.
+---
 
-### Option 2 --- Local Python Environment
+## Repository structure
 
-Python 3.11.x is required.
+```text
+tradingchassis_core/               Core package root
+tradingchassis_core/core/          Domain and semantic primitives
+tradingchassis_core/strategies/    Strategy interfaces and config
+tests/                             Core test suites
+scripts/                           Developer helper scripts
+```
+
+---
+
+## Development setup
+
+Requirements:
+
+- Python 3.11+
+
+Recommended local setup:
 
 ```bash
-pip install -e .
-python examples/local/backtest.py --config examples/local/local.json
+python -m pip install -e ".[dev]"
 ```
 
 ---
 
-## ▶️ Execution Modes
+## Test commands
 
-### Local Mode
-
-- Fully local execution
-- Uses bundled or synthetic data
-- No cloud dependencies
-- Suitable for development and testing
+From the `core` repository root:
 
 ```bash
-python examples/local/backtest.py --config examples/local/local.json
+python -m pytest
 ```
 
-### Cloud / Entrypoint Mode
-
-The backtest runtime exposes entrypoints designed for cloud-native
-execution environments.
-
-These enable:
-
-- Remote segment execution
-- Distributed parameter sweeps
-- Object storage integration
-- Experiment orchestration via external workflow engines
-
-Entrypoints are located in:
-
-```
-trading_framework/backtest/runtime/
-```
-
-Infrastructure and orchestration configuration are intentionally kept separate from the core trading framework.
-
-Cloud execution currently relies on [Oracle Cloud Infrastructure](https://cloud.oracle.com) (OCI) Object Storage accessed via Instance Principals and OCI IAM configuration.
-The storage integration is implemented through an S3-compatible adapter in the I/O layer located in:
-
-```
-trading_framework/backtest/io/
-```
-
-The runtime entrypoints are designed primarily for [Kubernetes](https://kubernetes.io)-based workloads orchestrated via [Argo Workflows](https://argoproj.github.io/workflows).
-
-While the core architecture is cloud-agnostic, the current infrastructure bindings are OCI-specific.
-Other cloud providers and execution environments are not yet implemented.
-
----
-
-## 📊 Data Requirements
-
-The backtest engine expects structured, event-driven market data
-compatible with `hftbacktest`.
-
-Key assumptions:
-
-- Timestamp-based atomic event processing
-- Deterministic event ordering
-- Preprocessed market events
-- No implicit reconstruction during runtime
-
-Example synthetic datasets are provided in:
-
-```
-tests/data/parts/
-```
-
-Example parts:
-
-```
-tests/data/parts/part-000.npz
-tests/data/parts/part-001.npz
-tests/data/parts/part-002.npz
-```
-
-### Result Artifacts
-
-Backtest runs produce deterministic result artifacts stored in:
-
-```
-tests/data/results/
-```
-
-Generated files may include:
-
-```
-tests/data/results/stats.npz
-tests/data/results/events.json
-```
-
-Helper scripts for generating and inspecting synthetic datasets are located in:
-
-```
-tests/data/scripts/
-```
-
----
-
-## ⚙️ Configuration
-
-Execution is driven by explicit configuration files
-(e.g. `examples/local/local.json`).
-
-Configurations define:
-
-- Data sources
-- Risk constraints
-- Strategy parameters
-- Execution settings
-
-All configuration is explicit and validated.
-
----
-
-## 🔒 Deterministic Execution
-
-The framework enforces:
-
-- Explicit state transitions
-- No hidden side effects
-- Ordered event processing
-- Reproducible backtest runs
-
-Semantic invariants are verified via dedicated test suites.
-
-Run tests with:
+From a monorepo parent containing `core/`:
 
 ```bash
-pytest
+python -m pytest -q core/tests
 ```
 
 ---
 
-## 🧪 Research & Orchestration
+## Relationship to Core Runtime
 
-The backtest layer includes:
+Core Runtime (`core-runtime`) provides runtime execution around Core, including:
 
-- Segment-based execution
-- Parameter sweeps
-- Experiment finalization entrypoints
-- Metrics export hooks compatible with [Prometheus](https://prometheus.io)
-- Logging integration compatible with [MLflow](https://mlflow.org)
+- local hftbacktest-backed execution entrypoints
+- Argo/runtime orchestration entrypoints
+- runtime configuration and environment wiring
+- local output artifacts under `.runtime/local/results/`
 
-This enables structured research workflows.
-
-Metrics and experiment tracking are designed to integrate naturally into Kubernetes-based deployments, but the core framework does not require a specific monitoring or tracking backend.
+Core provides the deterministic semantics those runtime paths consume.
 
 ---
 
-## 📦 Scope
+## Documentation index
 
-This repository focuses on:
-
-- Realistic backtesting
-- Uniform core domain logic
-- Risk-aware backtesting and execution
-- Deterministic research workflows
-
-It does not include:
-
-- Data collection pipelines
-- Production-grade OMS cloud infrastructure
-
-Live exchange connectivity and production-grade OMS software infrastructure
-are under active development and not yet feature-complete.
+- Terminology source of truth: `docs/docs/00-guides/terminology.md`
+- Runtime capabilities and entrypoints: `core-runtime/README.md`
 
 ---
 
-## 🎯 Design Principles
+## License and versioning
 
-- Determinism over convenience
-- Explicit state modeling
-- No hidden side effects
-- Risk-first architecture
-- Clear domain boundaries
-
----
-
-## 📌 Project Status
-
-- Backtest stack: maturing
-- Live adapters: under development
-- Cloud execution: experimental
-
----
-
-## 👥 Who is this for?
-
-- Quant developers building systematic strategies
-- Engineers interested in event-driven architectures
-- Researchers requiring deterministic simulations
-- Contributors exploring structured trading systems
-- Reviewers evaluating system design and architecture depth
-
----
-
-## 🏷️ Versioning
-
-This project follows the MIT license and semantic versioning.
-Initial public release: `v0.1.0`
+MIT licensed. Versioning follows semantic versioning.

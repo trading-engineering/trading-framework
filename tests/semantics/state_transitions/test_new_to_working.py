@@ -8,8 +8,8 @@ the order must be present in the working orders state.
 
 from __future__ import annotations
 
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 
 
 def test_new_transitions_to_working() -> None:

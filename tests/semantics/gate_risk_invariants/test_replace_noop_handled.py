@@ -8,17 +8,17 @@ must not be sent, queued, or rejected. It must be handled as no-op.
 
 from __future__ import annotations
 
-from trading_framework.core.domain.state import StrategyState
-from trading_framework.core.domain.types import (
+from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.types import (
     NotionalLimits,
     OrderStateEvent,
     Price,
     Quantity,
     ReplaceOrderIntent,
 )
-from trading_framework.core.events.sinks.null_event_bus import NullEventBus
-from trading_framework.core.risk.risk_config import RiskConfig
-from trading_framework.core.risk.risk_engine import RiskEngine
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.risk.risk_config import RiskConfig
+from tradingchassis_core.core.risk.risk_engine import RiskEngine
 
 
 def test_replace_without_effective_change_is_handled_noop() -> None:

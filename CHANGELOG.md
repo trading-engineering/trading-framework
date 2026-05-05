@@ -9,7 +9,7 @@ and this project adheres to Semantic Versioning.
 
 ## [0.1.0] - 2026-02-17
 
-Initial public release of the trading framework backtest core.
+Initial public release of the core.
 
 ### Added
 
@@ -43,7 +43,7 @@ Initial public release of the trading framework backtest core.
 - Cloud-native runtime entrypoints
 - S3-compatible storage adapter
 
-#### Strategy Framework
+#### Strategy
 - Base strategy interface
 - Structured strategy configuration
 

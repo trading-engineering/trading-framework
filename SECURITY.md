@@ -54,7 +54,7 @@ Security-related dependency updates are prioritized.
 
 ## Responsible Usage
 
-This framework is intended for research and controlled environments.
+This code is intended for research and controlled environments.
 
 Users are responsible for:
 
