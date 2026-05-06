@@ -101,8 +101,10 @@ class ExecutionControl:
                         accept_now=False,
                         stage_to_queue=True,
                         scheduling_obligation=ControlSchedulingObligation(
-                            ts_ns_local=wake_ts,
+                            due_ts_ns_local=wake_ts,
                             reason="rate_limit",
+                            scope_key=f"instrument:{it.instrument}",
+                            source="execution_control_rate_limit",
                         ),
                     )
             return _RateRoutingResult(
@@ -120,8 +122,10 @@ class ExecutionControl:
                     accept_now=False,
                     stage_to_queue=True,
                     scheduling_obligation=ControlSchedulingObligation(
-                        ts_ns_local=wake_ts,
+                        due_ts_ns_local=wake_ts,
                         reason="rate_limit",
+                        scope_key=f"instrument:{it.instrument}",
+                        source="execution_control_rate_limit",
                     ),
                 )
 

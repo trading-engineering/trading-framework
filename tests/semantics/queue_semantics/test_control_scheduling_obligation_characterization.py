@@ -90,6 +90,10 @@ def test_rate_limited_mixed_intents_keep_minimum_next_send_timestamp() -> None:
     assert decision.rejected == []
     assert len(decision.queued) == 2
     assert decision.next_send_ts_ns_local == 500_000_000
+    assert len(decision.control_scheduling_obligations) == 2
+    assert min(
+        o.due_ts_ns_local for o in decision.control_scheduling_obligations
+    ) == 500_000_000
 
 
 def test_rate_limit_routing_sets_internal_obligation_reason_characterization() -> None:
@@ -118,6 +122,14 @@ def test_rate_limit_routing_sets_internal_obligation_reason_characterization() -
     assert result.accept_now is False
     assert result.stage_to_queue is True
     assert result.scheduling_obligation is not None
-    assert result.scheduling_obligation.ts_ns_local == 1_000_000_000
-    assert result.scheduling_obligation.reason == "rate_limit"
+    obligation = result.scheduling_obligation
+    assert obligation.due_ts_ns_local == 1_000_000_000
+    assert obligation.ts_ns_local == 1_000_000_000
+    assert obligation.reason == "rate_limit"
+    assert obligation.scope_key == "instrument:BTC-USDC-PERP"
+    assert obligation.source == "execution_control_rate_limit"
+    assert (
+        obligation.obligation_key
+        == "execution_control_rate_limit|instrument:BTC-USDC-PERP|rate_limit|1000000000"
+    )
 

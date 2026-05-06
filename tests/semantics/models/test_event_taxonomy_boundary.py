@@ -161,3 +161,24 @@ def test_process_canonical_event_rejects_derived_fill_event_guard() -> None:
     else:
         raise AssertionError("Expected process_canonical_event to reject DerivedFillEvent")
 
+
+def test_process_canonical_event_rejects_control_scheduling_obligation_guard() -> None:
+    """Canonical processing boundary rejects non-canonical control obligations."""
+
+    state = StrategyState(event_bus=NullEventBus())
+    non_canonical_helper = ControlSchedulingObligation(
+        due_ts_ns_local=1_000_000_000,
+        reason="rate_limit",
+        scope_key="instrument:BTC-USDC-PERP",
+        source="execution_control_rate_limit",
+    )
+
+    try:
+        process_canonical_event(state, non_canonical_helper)
+    except TypeError as exc:
+        assert "Unsupported non-canonical event type" in str(exc)
+    else:
+        raise AssertionError(
+            "Expected process_canonical_event to reject ControlSchedulingObligation"
+        )
+

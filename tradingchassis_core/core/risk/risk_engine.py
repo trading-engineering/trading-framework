@@ -10,6 +10,9 @@ from tradingchassis_core.core.domain.reject_reasons import RejectReason
 from tradingchassis_core.core.domain.types import OrderIntent, RiskConstraints
 from tradingchassis_core.core.events.events import RiskDecisionEvent
 from tradingchassis_core.core.execution_control import ExecutionControl
+from tradingchassis_core.core.execution_control.types import (
+    ControlSchedulingObligation,
+)
 from tradingchassis_core.core.ports.venue_policy import VenuePolicy
 from tradingchassis_core.core.risk.risk_policy import RiskPolicy
 
@@ -59,6 +62,7 @@ class GateDecision:
     # Populated by the runner after outbound execution.
     execution_rejected: list[RejectedIntent]
     next_send_ts_ns_local: int | None
+    control_scheduling_obligations: tuple[ControlSchedulingObligation, ...] = ()
 
 
 class RiskEngine:
@@ -223,6 +227,7 @@ class RiskEngine:
         # Intents that ended up queued due to rate limits or due to queue-only handling.
         queued: list[OrderIntent] = []
         next_send_ts: int | None = None
+        control_scheduling_obligations: list[ControlSchedulingObligation] = []
 
         # counters for RiskDecisionEvent
         reject_counts: dict[str, int] = {}
@@ -250,6 +255,7 @@ class RiskEngine:
                 handled_in_queue=[],
                 execution_rejected=[],
                 next_send_ts_ns_local=None,
+                control_scheduling_obligations=(),
             )
 
             # emit summary
@@ -289,6 +295,7 @@ class RiskEngine:
                 handled_in_queue=[],
                 execution_rejected=[],
                 next_send_ts_ns_local=None,
+                control_scheduling_obligations=(),
             )
 
             self._event_bus.emit(
@@ -397,10 +404,11 @@ class RiskEngine:
                 to_queue_by_instr[it.instrument].append(it)
                 obligation = rate_result.scheduling_obligation
                 if obligation is not None:
+                    control_scheduling_obligations.append(obligation)
                     next_send_ts = (
-                        obligation.ts_ns_local
+                        obligation.due_ts_ns_local
                         if next_send_ts is None
-                        else min(next_send_ts, obligation.ts_ns_local)
+                        else min(next_send_ts, obligation.due_ts_ns_local)
                     )
                 continue
 
@@ -427,6 +435,7 @@ class RiskEngine:
             handled_in_queue=handled_in_queue,
             execution_rejected=[],
             next_send_ts_ns_local=next_send_ts,
+            control_scheduling_obligations=tuple(control_scheduling_obligations),
         )
 
         self._event_bus.emit(
