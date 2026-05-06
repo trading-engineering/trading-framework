@@ -18,11 +18,18 @@ from tradingchassis_core.core.risk.risk_engine import GateDecision
 class CoreStepResult:
     """Immutable result object for the future Core processing step API."""
 
+    generated_intents: tuple[OrderIntent, ...] = ()
     dispatchable_intents: tuple[OrderIntent, ...] = ()
     control_scheduling_obligation: ControlSchedulingObligation | None = None
     compat_gate_decision: GateDecision | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.generated_intents, tuple):
+            object.__setattr__(
+                self,
+                "generated_intents",
+                tuple(self.generated_intents),
+            )
         # Normalize sequence-like inputs to a tuple to keep deterministic value semantics.
         if not isinstance(self.dispatchable_intents, tuple):
             object.__setattr__(

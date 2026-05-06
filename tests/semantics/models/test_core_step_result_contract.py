@@ -14,7 +14,13 @@ from tradingchassis_core.core.domain.event_model import (
 from tradingchassis_core.core.domain.processing import process_canonical_event
 from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.step_result import CoreStepResult
-from tradingchassis_core.core.domain.types import NewOrderIntent, Price, Quantity
+from tradingchassis_core.core.domain.types import (
+    CancelOrderIntent,
+    NewOrderIntent,
+    Price,
+    Quantity,
+    ReplaceOrderIntent,
+)
 from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
 from tradingchassis_core.core.risk.risk_engine import GateDecision
@@ -37,6 +43,7 @@ def _new_intent(*, client_order_id: str) -> NewOrderIntent:
 def test_default_result_is_empty_and_none_compat() -> None:
     result = CoreStepResult()
 
+    assert result.generated_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
     assert result.compat_gate_decision is None
@@ -57,6 +64,55 @@ def test_dispatchable_intents_normalize_to_tuple() -> None:
 
     assert isinstance(result.dispatchable_intents, tuple)
     assert result.dispatchable_intents == (intent_one, intent_two)
+
+
+def test_generated_intents_normalize_to_tuple() -> None:
+    intent_one = _new_intent(client_order_id="generated-1")
+    intent_two = _new_intent(client_order_id="generated-2")
+
+    result = CoreStepResult(generated_intents=[intent_one, intent_two])
+
+    assert isinstance(result.generated_intents, tuple)
+    assert result.generated_intents == (intent_one, intent_two)
+
+
+def test_generated_intents_are_distinct_from_dispatchable_intents() -> None:
+    generated = _new_intent(client_order_id="generated-only")
+    dispatchable = _new_intent(client_order_id="dispatchable-only")
+
+    result = CoreStepResult(
+        generated_intents=[generated],
+        dispatchable_intents=[dispatchable],
+    )
+
+    assert result.generated_intents == (generated,)
+    assert result.dispatchable_intents == (dispatchable,)
+
+
+def test_generated_intents_accept_new_replace_cancel_intents() -> None:
+    new_intent = _new_intent(client_order_id="new-intent")
+    replace_intent = ReplaceOrderIntent(
+        ts_ns_local=2,
+        instrument="BTC-USDC-PERP",
+        client_order_id="replace-intent",
+        intents_correlation_id="corr-replace",
+        side="buy",
+        order_type="limit",
+        intended_qty=Quantity(value=2.0, unit="contracts"),
+        intended_price=Price(currency="USDC", value=101.0),
+    )
+    cancel_intent = CancelOrderIntent(
+        ts_ns_local=3,
+        instrument="BTC-USDC-PERP",
+        client_order_id="cancel-intent",
+        intents_correlation_id="corr-cancel",
+    )
+
+    result = CoreStepResult(
+        generated_intents=[new_intent, replace_intent, cancel_intent],
+    )
+
+    assert result.generated_intents == (new_intent, replace_intent, cancel_intent)
 
 
 def test_can_carry_optional_control_scheduling_obligation() -> None:

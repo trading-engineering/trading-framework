@@ -186,6 +186,7 @@ def test_run_core_step_delegates_and_returns_default_core_step_result() -> None:
     result = run_core_step(skeleton_state, entry)
 
     assert isinstance(result, CoreStepResult)
+    assert result.generated_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
     assert result.compat_gate_decision is None
@@ -208,6 +209,7 @@ def test_run_core_step_omitting_strategy_evaluator_preserves_existing_behavior()
     process_event_entry(baseline_state, entry)
     result = run_core_step(no_strategy_state, entry)
 
+    assert result.generated_intents == ()
     assert result == CoreStepResult()
     assert _state_subset_snapshot(no_strategy_state) == _state_subset_snapshot(baseline_state)
 
@@ -332,7 +334,9 @@ def test_run_core_step_calls_strategy_evaluator_once_with_post_reducer_context()
     assert context.state is state
     assert context.state._last_processing_position_index == 12
     assert context.state.market["BTC-USDC-PERP"].best_bid == 100.0
-    assert result == CoreStepResult()
+    assert result.generated_intents == (generated_intent,)
+    assert result.dispatchable_intents == ()
+    assert result.compat_gate_decision is None
 
 
 def test_run_core_step_boundary_remains_non_canonical_for_compatibility_artifacts() -> None:
@@ -548,7 +552,7 @@ def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deter
         def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
             assert context.state._last_processing_position_index == 20
             calls.append("evaluate")
-            return [_new_intent(client_order_id="generated-scaffold-only")]
+            return [_new_intent(client_order_id="generated-captured")]
 
     original_pop = state.pop_queued_intents
 
@@ -602,9 +606,54 @@ def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deter
     )
 
     assert calls == ["evaluate", "pop", "risk"]
+    assert tuple(it.client_order_id for it in result.generated_intents) == (
+        "generated-captured",
+    )
     assert tuple(it.client_order_id for it in result.dispatchable_intents) == (
         "accepted-control-time",
     )
+
+
+def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control_time_queue_path() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    state.merge_intents_into_queue(instrument, [_new_intent(client_order_id="queued-before-failure")])
+    calls = {"pop": 0, "risk": 0}
+
+    def _pop_spy(_: str) -> list[NewOrderIntent]:
+        calls["pop"] += 1
+        return []
+
+    state.pop_queued_intents = _pop_spy  # type: ignore[method-assign]
+
+    class _EvaluatorBoom:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 30
+            raise RuntimeError("strategy evaluator failed")
+
+    class _RiskSpy:
+        def decide_intents(self, **_: object) -> GateDecision:
+            calls["risk"] += 1
+            raise AssertionError("risk should not run after strategy evaluator failure")
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=30),
+        event=_control_time_event(due_ts_ns_local=30, realized_ts_ns_local=30),
+    )
+
+    with pytest.raises(RuntimeError, match="strategy evaluator failed"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_EvaluatorBoom(),
+            control_time_queue_context=ControlTimeQueueReevaluationContext(
+                risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+                instrument=instrument,
+                now_ts_ns_local=30,
+            ),
+        )
+
+    assert calls == {"pop": 0, "risk": 0}
 
 
 def test_run_core_step_does_not_pop_or_gate_when_process_event_entry_fails(

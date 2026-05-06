@@ -84,6 +84,7 @@ def run_core_step(
     """
     process_event_entry(state, entry, configuration=configuration)
 
+    generated_intents: tuple[OrderIntent, ...] = ()
     if strategy_evaluator is not None:
         strategy_context = CoreStepStrategyContext(
             state=state,
@@ -91,20 +92,17 @@ def run_core_step(
             position=entry.position,
             configuration=configuration,
         )
-        # Scaffold-only evaluation entry:
-        # - exactly one strategy call per successful Core step when provided
-        # - returned intents are intentionally not integrated yet
-        _ = tuple(strategy_evaluator.evaluate(strategy_context))
+        generated_intents = tuple(strategy_evaluator.evaluate(strategy_context))
 
     if not isinstance(entry.event, ControlTimeEvent):
-        return CoreStepResult()
+        return CoreStepResult(generated_intents=generated_intents)
 
     if control_time_queue_context is None:
-        return CoreStepResult()
+        return CoreStepResult(generated_intents=generated_intents)
 
     popped_intents = state.pop_queued_intents(control_time_queue_context.instrument)
     if not popped_intents:
-        return CoreStepResult()
+        return CoreStepResult(generated_intents=generated_intents)
 
     decision = control_time_queue_context.risk_engine.decide_intents(
         raw_intents=popped_intents,
@@ -113,6 +111,7 @@ def run_core_step(
     )
     selected_obligation = _select_effective_control_scheduling_obligation(decision)
     return CoreStepResult(
+        generated_intents=generated_intents,
         dispatchable_intents=tuple(decision.accepted_now),
         control_scheduling_obligation=selected_obligation,
         compat_gate_decision=decision,
