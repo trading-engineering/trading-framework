@@ -7,6 +7,7 @@ import copy
 import pytest
 
 import tradingchassis_core as tc
+import tradingchassis_core.core.domain.processing_step as processing_step_module
 from tradingchassis_core.core.domain import run_core_step as domain_run_core_step
 from tradingchassis_core.core.domain.event_model import (
     canonical_category_for_type,
@@ -14,10 +15,14 @@ from tradingchassis_core.core.domain.event_model import (
 )
 from tradingchassis_core.core.domain.processing import process_event_entry
 from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
-from tradingchassis_core.core.domain.processing_step import run_core_step
+from tradingchassis_core.core.domain.processing_step import (
+    ControlTimeQueueReevaluationContext,
+    run_core_step,
+)
 from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.step_result import CoreStepResult
 from tradingchassis_core.core.domain.types import (
+    ControlTimeEvent,
     FillEvent,
     MarketEvent,
     NewOrderIntent,
@@ -115,6 +120,22 @@ def _market_configuration(*, instrument: str = "BTC-USDC-PERP") -> tc.CoreConfig
                 }
             }
         },
+    )
+
+
+def _control_time_event(
+    *,
+    due_ts_ns_local: int,
+    realized_ts_ns_local: int,
+) -> ControlTimeEvent:
+    return ControlTimeEvent(
+        ts_ns_local_control=realized_ts_ns_local,
+        reason="scheduled_control_recheck",
+        due_ts_ns_local=due_ts_ns_local,
+        realized_ts_ns_local=realized_ts_ns_local,
+        obligation_reason="rate_limit",
+        obligation_due_ts_ns_local=due_ts_ns_local,
+        runtime_correlation=None,
     )
 
 
@@ -296,3 +317,170 @@ def test_run_core_step_boundary_remains_non_canonical_for_compatibility_artifact
     for entry in entries:
         with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
             run_core_step(state, entry)
+
+
+def test_run_core_step_control_time_with_context_processes_canonical_then_queue_and_risk() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    queued_intent = _new_intent(client_order_id="queued-1")
+    state.merge_intents_into_queue(instrument, [queued_intent])
+
+    calls: list[str] = []
+    popped_raw_intents: list[list[NewOrderIntent]] = []
+
+    original_pop = state.pop_queued_intents
+
+    def _spy_pop_queued_intents(target_instrument: str) -> list[NewOrderIntent]:
+        assert target_instrument == instrument
+        # Canonical processing runs first and advances the positioned cursor.
+        assert state._last_processing_position_index == 7
+        calls.append("pop")
+        return original_pop(target_instrument)  # type: ignore[return-value]
+
+    state.pop_queued_intents = _spy_pop_queued_intents  # type: ignore[method-assign]
+
+    accepted_now = _new_intent(client_order_id="accepted-now")
+    obligation_a = ControlSchedulingObligation(
+        due_ts_ns_local=42,
+        reason="rate_limit",
+        scope_key=f"instrument:{instrument}",
+        source="execution_control_rate_limit",
+        obligation_key="z-key",
+    )
+    obligation_b = ControlSchedulingObligation(
+        due_ts_ns_local=42,
+        reason="rate_limit",
+        scope_key=f"instrument:{instrument}",
+        source="execution_control_rate_limit",
+        obligation_key="a-key",
+    )
+    obligation_c = ControlSchedulingObligation(
+        due_ts_ns_local=17,
+        reason="rate_limit",
+        scope_key=f"instrument:{instrument}",
+        source="execution_control_rate_limit",
+        obligation_key="x-key",
+    )
+
+    class _RiskSpy:
+        def decide_intents(
+            self,
+            *,
+            raw_intents: list[NewOrderIntent],
+            state: StrategyState,
+            now_ts_ns_local: int,
+        ) -> GateDecision:
+            assert state is not None
+            assert now_ts_ns_local == 1_000
+            calls.append("risk")
+            popped_raw_intents.append(list(raw_intents))
+            return GateDecision(
+                ts_ns_local=now_ts_ns_local,
+                accepted_now=[accepted_now],
+                queued=[],
+                rejected=[],
+                replaced_in_queue=[],
+                dropped_in_queue=[],
+                handled_in_queue=[],
+                execution_rejected=[],
+                next_send_ts_ns_local=17,
+                control_scheduling_obligations=(obligation_a, obligation_b, obligation_c),
+            )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=7),
+        event=_control_time_event(due_ts_ns_local=999, realized_ts_ns_local=1_000),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        control_time_queue_context=ControlTimeQueueReevaluationContext(
+            risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+            instrument=instrument,
+            now_ts_ns_local=1_000,
+        ),
+    )
+
+    assert calls == ["pop", "risk"]
+    assert len(popped_raw_intents) == 1
+    assert [it.client_order_id for it in popped_raw_intents[0]] == [queued_intent.client_order_id]
+    assert tuple(it.client_order_id for it in result.dispatchable_intents) == ("accepted-now",)
+    assert result.compat_gate_decision is not None
+    assert result.control_scheduling_obligation is not None
+    assert result.control_scheduling_obligation.due_ts_ns_local == 17
+    assert result.control_scheduling_obligation.obligation_key == "x-key"
+
+
+def test_run_core_step_non_control_time_ignores_control_time_context() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+
+    class _RiskMustNotRun:
+        def decide_intents(self, **_: object) -> GateDecision:
+            raise AssertionError("risk must not run for non-control events")
+
+    def _pop_must_not_run(_: str) -> list[NewOrderIntent]:
+        raise AssertionError("queue pop must not run for non-control events")
+
+    state.pop_queued_intents = _pop_must_not_run  # type: ignore[method-assign]
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=5),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-no-control",
+            ts_ns_local=5,
+            ts_ns_exch=4,
+        ),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        control_time_queue_context=ControlTimeQueueReevaluationContext(
+            risk_engine=_RiskMustNotRun(),  # type: ignore[arg-type]
+            instrument="BTC-USDC-PERP",
+            now_ts_ns_local=5,
+        ),
+    )
+
+    assert result == CoreStepResult()
+
+
+def test_run_core_step_does_not_pop_or_gate_when_process_event_entry_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    calls = {"pop": 0, "risk": 0}
+
+    def _pop_spy(_: str) -> list[NewOrderIntent]:
+        calls["pop"] += 1
+        return []
+
+    state.pop_queued_intents = _pop_spy  # type: ignore[method-assign]
+
+    class _RiskSpy:
+        def decide_intents(self, **_: object) -> GateDecision:
+            calls["risk"] += 1
+            raise AssertionError("risk should not run when boundary fails first")
+
+    def _boom(*_: object, **__: object) -> None:
+        raise RuntimeError("process boundary failed")
+
+    monkeypatch.setattr(processing_step_module, "process_event_entry", _boom)
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=9),
+        event=_control_time_event(due_ts_ns_local=9, realized_ts_ns_local=9),
+    )
+
+    with pytest.raises(RuntimeError, match="process boundary failed"):
+        run_core_step(
+            state,
+            entry,
+            control_time_queue_context=ControlTimeQueueReevaluationContext(
+                risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+                instrument="BTC-USDC-PERP",
+                now_ts_ns_local=9,
+            ),
+        )
+
+    assert calls == {"pop": 0, "risk": 0}
