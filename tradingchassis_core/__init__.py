@@ -17,6 +17,7 @@ from tradingchassis_core.core.domain.processing_order import (
     EventStreamEntry,
     ProcessingPosition,
 )
+from tradingchassis_core.core.domain.processing_step import run_core_step
 
 # ----------------------------------------------------------------------
 # Backtest Engine API
@@ -88,6 +89,7 @@ __all__ = [
     "ProcessingPosition",
     "EventStreamEntry",
     "process_event_entry",
+    "run_core_step",
     "fold_event_stream_entries",
     "CoreStepResult",
 
