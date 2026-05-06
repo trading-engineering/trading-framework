@@ -17,6 +17,7 @@ from tradingchassis_core.core.domain.processing import process_event_entry
 from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from tradingchassis_core.core.domain.processing_step import (
     ControlTimeQueueReevaluationContext,
+    CoreStepStrategyContext,
     run_core_step,
 )
 from tradingchassis_core.core.domain.state import StrategyState
@@ -191,6 +192,26 @@ def test_run_core_step_delegates_and_returns_default_core_step_result() -> None:
     assert _state_subset_snapshot(skeleton_state) == _state_subset_snapshot(baseline_state)
 
 
+def test_run_core_step_omitting_strategy_evaluator_preserves_existing_behavior() -> None:
+    baseline_state = StrategyState(event_bus=NullEventBus())
+    no_strategy_state = StrategyState(event_bus=NullEventBus())
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=6),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-omitted-evaluator",
+            ts_ns_local=300,
+            ts_ns_exch=280,
+        ),
+    )
+
+    process_event_entry(baseline_state, entry)
+    result = run_core_step(no_strategy_state, entry)
+
+    assert result == CoreStepResult()
+    assert _state_subset_snapshot(no_strategy_state) == _state_subset_snapshot(baseline_state)
+
+
 def test_run_core_step_propagates_non_canonical_rejection() -> None:
     state = StrategyState(event_bus=NullEventBus())
     entry = EventStreamEntry(
@@ -275,6 +296,43 @@ def test_run_core_step_passes_configuration_through_to_market_processing() -> No
     assert state._last_processing_position_index == 0
     assert market.best_bid == 100.0
     assert market.best_ask == 101.0
+
+
+def test_run_core_step_calls_strategy_evaluator_once_with_post_reducer_context() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    configuration = _market_configuration(instrument="BTC-USDC-PERP")
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=12),
+        event=_book_market_event(
+            instrument="BTC-USDC-PERP",
+            ts_ns_local=1_200,
+            ts_ns_exch=1_100,
+        ),
+    )
+    generated_intent = _new_intent(client_order_id="generated-not-dispatchable-yet")
+    captured_contexts: list[CoreStepStrategyContext] = []
+
+    class _EvaluatorSpy:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            captured_contexts.append(context)
+            return [generated_intent]
+
+    result = run_core_step(
+        state,
+        entry,
+        configuration=configuration,
+        strategy_evaluator=_EvaluatorSpy(),
+    )
+
+    assert len(captured_contexts) == 1
+    context = captured_contexts[0]
+    assert context.event is entry.event
+    assert context.position == entry.position
+    assert context.configuration is configuration
+    assert context.state is state
+    assert context.state._last_processing_position_index == 12
+    assert context.state.market["BTC-USDC-PERP"].best_bid == 100.0
+    assert result == CoreStepResult()
 
 
 def test_run_core_step_boundary_remains_non_canonical_for_compatibility_artifacts() -> None:
@@ -443,6 +501,110 @@ def test_run_core_step_non_control_time_ignores_control_time_context() -> None:
     )
 
     assert result == CoreStepResult()
+
+
+def test_run_core_step_does_not_call_strategy_evaluator_when_process_event_entry_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    called = {"evaluate": 0}
+
+    class _EvaluatorSpy:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            _ = context
+            called["evaluate"] += 1
+            return []
+
+    def _boom(*_: object, **__: object) -> None:
+        raise RuntimeError("process boundary failed")
+
+    monkeypatch.setattr(processing_step_module, "process_event_entry", _boom)
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=10),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-failure-evaluator",
+            ts_ns_local=10,
+            ts_ns_exch=9,
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="process boundary failed"):
+        run_core_step(state, entry, strategy_evaluator=_EvaluatorSpy())
+
+    assert called == {"evaluate": 0}
+
+
+def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deterministically() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    queued_intent = _new_intent(client_order_id="queued-with-strategy")
+    state.merge_intents_into_queue(instrument, [queued_intent])
+
+    calls: list[str] = []
+
+    class _EvaluatorSpy:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 20
+            calls.append("evaluate")
+            return [_new_intent(client_order_id="generated-scaffold-only")]
+
+    original_pop = state.pop_queued_intents
+
+    def _spy_pop_queued_intents(target_instrument: str) -> list[NewOrderIntent]:
+        assert target_instrument == instrument
+        calls.append("pop")
+        return original_pop(target_instrument)  # type: ignore[return-value]
+
+    state.pop_queued_intents = _spy_pop_queued_intents  # type: ignore[method-assign]
+
+    accepted_now = _new_intent(client_order_id="accepted-control-time")
+
+    class _RiskSpy:
+        def decide_intents(
+            self,
+            *,
+            raw_intents: list[NewOrderIntent],
+            state: StrategyState,
+            now_ts_ns_local: int,
+        ) -> GateDecision:
+            assert state is not None
+            assert now_ts_ns_local == 2_000
+            assert [it.client_order_id for it in raw_intents] == [queued_intent.client_order_id]
+            calls.append("risk")
+            return GateDecision(
+                ts_ns_local=now_ts_ns_local,
+                accepted_now=[accepted_now],
+                queued=[],
+                rejected=[],
+                replaced_in_queue=[],
+                dropped_in_queue=[],
+                handled_in_queue=[],
+                execution_rejected=[],
+                next_send_ts_ns_local=None,
+                control_scheduling_obligations=(),
+            )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=20),
+        event=_control_time_event(due_ts_ns_local=2_000, realized_ts_ns_local=2_000),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        strategy_evaluator=_EvaluatorSpy(),
+        control_time_queue_context=ControlTimeQueueReevaluationContext(
+            risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+            instrument=instrument,
+            now_ts_ns_local=2_000,
+        ),
+    )
+
+    assert calls == ["evaluate", "pop", "risk"]
+    assert tuple(it.client_order_id for it in result.dispatchable_intents) == (
+        "accepted-control-time",
+    )
 
 
 def test_run_core_step_does_not_pop_or_gate_when_process_event_entry_fails(

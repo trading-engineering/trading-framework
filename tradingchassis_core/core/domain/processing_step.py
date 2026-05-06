@@ -8,18 +8,39 @@ and returns an empty CoreStepResult contract value.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, Sequence
 
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
 from tradingchassis_core.core.domain.processing import process_event_entry
-from tradingchassis_core.core.domain.processing_order import EventStreamEntry
+from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.step_result import CoreStepResult
-from tradingchassis_core.core.domain.types import ControlTimeEvent
+from tradingchassis_core.core.domain.types import ControlTimeEvent, OrderIntent
 from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
 
 if TYPE_CHECKING:
     from tradingchassis_core.core.risk.risk_engine import GateDecision, RiskEngine
+
+
+@dataclass(frozen=True, slots=True)
+class CoreStepStrategyContext:
+    """Deterministic strategy-evaluation context for one Core step.
+
+    ``state`` is currently passed by reference for compatibility. Strategy
+    evaluators must treat it as read-only by contract in this scaffold slice.
+    """
+
+    state: StrategyState
+    event: object
+    position: ProcessingPosition
+    configuration: CoreConfiguration | None = None
+
+
+class CoreStepStrategyEvaluator(Protocol):
+    """Core-owned strategy evaluation protocol for unified step semantics."""
+
+    def evaluate(self, context: CoreStepStrategyContext) -> Sequence[OrderIntent]:
+        """Evaluate strategy once for the provided step context."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +73,7 @@ def run_core_step(
     *,
     configuration: CoreConfiguration | None = None,
     control_time_queue_context: ControlTimeQueueReevaluationContext | None = None,
+    strategy_evaluator: CoreStepStrategyEvaluator | None = None,
 ) -> CoreStepResult:
     """Run one transitional Core step.
 
@@ -61,6 +83,18 @@ def run_core_step(
     - returns an empty CoreStepResult for future deterministic effects.
     """
     process_event_entry(state, entry, configuration=configuration)
+
+    if strategy_evaluator is not None:
+        strategy_context = CoreStepStrategyContext(
+            state=state,
+            event=entry.event,
+            position=entry.position,
+            configuration=configuration,
+        )
+        # Scaffold-only evaluation entry:
+        # - exactly one strategy call per successful Core step when provided
+        # - returned intents are intentionally not integrated yet
+        _ = tuple(strategy_evaluator.evaluate(strategy_context))
 
     if not isinstance(entry.event, ControlTimeEvent):
         return CoreStepResult()
