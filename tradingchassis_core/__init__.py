@@ -35,6 +35,7 @@ from tradingchassis_core.core.domain.slots import (
 # Domain Types (used by strategies)
 # ----------------------------------------------------------------------
 from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.step_result import CoreStepResult
 from tradingchassis_core.core.domain.types import (
     MarketEvent,
     NewOrderIntent,
@@ -88,6 +89,7 @@ __all__ = [
     "EventStreamEntry",
     "process_event_entry",
     "fold_event_stream_entries",
+    "CoreStepResult",
 
     # Version
     "__version__",
