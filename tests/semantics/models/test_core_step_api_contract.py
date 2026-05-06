@@ -23,6 +23,7 @@ from tradingchassis_core.core.domain.processing_step import (
 from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.step_result import CoreStepResult
 from tradingchassis_core.core.domain.types import (
+    CancelOrderIntent,
     ControlTimeEvent,
     FillEvent,
     MarketEvent,
@@ -187,6 +188,7 @@ def test_run_core_step_delegates_and_returns_default_core_step_result() -> None:
 
     assert isinstance(result, CoreStepResult)
     assert result.generated_intents == ()
+    assert result.candidate_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
     assert result.compat_gate_decision is None
@@ -210,6 +212,7 @@ def test_run_core_step_omitting_strategy_evaluator_preserves_existing_behavior()
     result = run_core_step(no_strategy_state, entry)
 
     assert result.generated_intents == ()
+    assert result.candidate_intents == ()
     assert result == CoreStepResult()
     assert _state_subset_snapshot(no_strategy_state) == _state_subset_snapshot(baseline_state)
 
@@ -335,6 +338,7 @@ def test_run_core_step_calls_strategy_evaluator_once_with_post_reducer_context()
     assert context.state._last_processing_position_index == 12
     assert context.state.market["BTC-USDC-PERP"].best_bid == 100.0
     assert result.generated_intents == (generated_intent,)
+    assert result.candidate_intents == (generated_intent,)
     assert result.dispatchable_intents == ()
     assert result.compat_gate_decision is None
 
@@ -467,6 +471,7 @@ def test_run_core_step_control_time_with_context_processes_canonical_then_queue_
     assert len(popped_raw_intents) == 1
     assert [it.client_order_id for it in popped_raw_intents[0]] == [queued_intent.client_order_id]
     assert tuple(it.client_order_id for it in result.dispatchable_intents) == ("accepted-now",)
+    assert tuple(it.client_order_id for it in result.candidate_intents) == ("queued-1",)
     assert result.compat_gate_decision is not None
     assert result.control_scheduling_obligation is not None
     assert result.control_scheduling_obligation.due_ts_ns_local == 17
@@ -507,11 +512,71 @@ def test_run_core_step_non_control_time_ignores_control_time_context() -> None:
     assert result == CoreStepResult()
 
 
+def test_run_core_step_includes_queued_snapshot_in_candidate_intents_without_mutation() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    queued_intent = _new_intent(client_order_id="queued-candidate")
+    state.merge_intents_into_queue(instrument, [queued_intent])
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=21),
+        event=_fill_event(
+            instrument=instrument,
+            client_order_id="fill-with-queued-candidate",
+            ts_ns_local=21,
+            ts_ns_exch=20,
+        ),
+    )
+    result = run_core_step(state, entry)
+
+    assert tuple(it.client_order_id for it in result.generated_intents) == ()
+    assert tuple(it.client_order_id for it in result.candidate_intents) == ("queued-candidate",)
+    assert result.dispatchable_intents == ()
+    assert state.has_queued_intent(instrument, "queued-candidate")
+
+
+def test_run_core_step_candidate_intents_apply_generated_vs_queued_dominance_without_queue_mutation() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    key = "same-key"
+    queued_new = _new_intent(client_order_id=key)
+    state.merge_intents_into_queue(instrument, [queued_new])
+
+    generated_cancel = CancelOrderIntent(
+        ts_ns_local=22,
+        instrument=instrument,
+        client_order_id=key,
+        intents_correlation_id="corr-cancel",
+    )
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[CancelOrderIntent]:
+            assert context.state._last_processing_position_index == 22
+            return [generated_cancel]
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=22),
+        event=_fill_event(
+            instrument=instrument,
+            client_order_id="fill-generated-vs-queued",
+            ts_ns_local=22,
+            ts_ns_exch=21,
+        ),
+    )
+    result = run_core_step(state, entry, strategy_evaluator=_Evaluator())
+
+    assert tuple(it.intent_type for it in result.generated_intents) == ("cancel",)
+    assert tuple(it.intent_type for it in result.candidate_intents) == ("cancel",)
+    assert result.dispatchable_intents == ()
+    assert state.has_queued_intent(instrument, key)
+
+
 def test_run_core_step_does_not_call_strategy_evaluator_when_process_event_entry_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state = StrategyState(event_bus=NullEventBus())
     called = {"evaluate": 0}
+    combine_called = {"value": 0}
 
     class _EvaluatorSpy:
         def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
@@ -523,6 +588,11 @@ def test_run_core_step_does_not_call_strategy_evaluator_when_process_event_entry
         raise RuntimeError("process boundary failed")
 
     monkeypatch.setattr(processing_step_module, "process_event_entry", _boom)
+    monkeypatch.setattr(
+        processing_step_module,
+        "combine_candidate_intents",
+        lambda **_: combine_called.__setitem__("value", combine_called["value"] + 1),
+    )
 
     entry = EventStreamEntry(
         position=ProcessingPosition(index=10),
@@ -538,6 +608,7 @@ def test_run_core_step_does_not_call_strategy_evaluator_when_process_event_entry
         run_core_step(state, entry, strategy_evaluator=_EvaluatorSpy())
 
     assert called == {"evaluate": 0}
+    assert combine_called == {"value": 0}
 
 
 def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deterministically() -> None:
@@ -609,16 +680,23 @@ def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deter
     assert tuple(it.client_order_id for it in result.generated_intents) == (
         "generated-captured",
     )
+    assert tuple(it.client_order_id for it in result.candidate_intents) == (
+        "queued-with-strategy",
+        "generated-captured",
+    )
     assert tuple(it.client_order_id for it in result.dispatchable_intents) == (
         "accepted-control-time",
     )
 
 
-def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control_time_queue_path() -> None:
+def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control_time_queue_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     state = StrategyState(event_bus=NullEventBus())
     instrument = "BTC-USDC-PERP"
     state.merge_intents_into_queue(instrument, [_new_intent(client_order_id="queued-before-failure")])
     calls = {"pop": 0, "risk": 0}
+    combine_called = {"value": 0}
 
     def _pop_spy(_: str) -> list[NewOrderIntent]:
         calls["pop"] += 1
@@ -635,6 +713,12 @@ def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control
         def decide_intents(self, **_: object) -> GateDecision:
             calls["risk"] += 1
             raise AssertionError("risk should not run after strategy evaluator failure")
+
+    monkeypatch.setattr(
+        processing_step_module,
+        "combine_candidate_intents",
+        lambda **_: combine_called.__setitem__("value", combine_called["value"] + 1),
+    )
 
     entry = EventStreamEntry(
         position=ProcessingPosition(index=30),
@@ -654,6 +738,7 @@ def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control
         )
 
     assert calls == {"pop": 0, "risk": 0}
+    assert combine_called == {"value": 0}
 
 
 def test_run_core_step_does_not_pop_or_gate_when_process_event_entry_fails(

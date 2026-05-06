@@ -44,6 +44,7 @@ def test_default_result_is_empty_and_none_compat() -> None:
     result = CoreStepResult()
 
     assert result.generated_intents == ()
+    assert result.candidate_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
     assert result.compat_gate_decision is None
@@ -78,14 +79,17 @@ def test_generated_intents_normalize_to_tuple() -> None:
 
 def test_generated_intents_are_distinct_from_dispatchable_intents() -> None:
     generated = _new_intent(client_order_id="generated-only")
+    candidate = _new_intent(client_order_id="candidate-only")
     dispatchable = _new_intent(client_order_id="dispatchable-only")
 
     result = CoreStepResult(
         generated_intents=[generated],
+        candidate_intents=[candidate],
         dispatchable_intents=[dispatchable],
     )
 
     assert result.generated_intents == (generated,)
+    assert result.candidate_intents == (candidate,)
     assert result.dispatchable_intents == (dispatchable,)
 
 
@@ -113,6 +117,24 @@ def test_generated_intents_accept_new_replace_cancel_intents() -> None:
     )
 
     assert result.generated_intents == (new_intent, replace_intent, cancel_intent)
+
+
+def test_candidate_intents_normalize_to_tuple() -> None:
+    intent_one = _new_intent(client_order_id="candidate-1")
+    intent_two = _new_intent(client_order_id="candidate-2")
+
+    result = CoreStepResult(candidate_intents=[intent_one, intent_two])
+
+    assert isinstance(result.candidate_intents, tuple)
+    assert result.candidate_intents == (intent_one, intent_two)
+
+
+def test_candidate_intents_are_not_dispatchable_by_default() -> None:
+    candidate = _new_intent(client_order_id="candidate-only")
+    result = CoreStepResult(candidate_intents=[candidate])
+
+    assert result.candidate_intents == (candidate,)
+    assert result.dispatchable_intents == ()
 
 
 def test_can_carry_optional_control_scheduling_obligation() -> None:

@@ -19,6 +19,7 @@ class CoreStepResult:
     """Immutable result object for the future Core processing step API."""
 
     generated_intents: tuple[OrderIntent, ...] = ()
+    candidate_intents: tuple[OrderIntent, ...] = ()
     dispatchable_intents: tuple[OrderIntent, ...] = ()
     control_scheduling_obligation: ControlSchedulingObligation | None = None
     compat_gate_decision: GateDecision | None = None
@@ -29,6 +30,12 @@ class CoreStepResult:
                 self,
                 "generated_intents",
                 tuple(self.generated_intents),
+            )
+        if not isinstance(self.candidate_intents, tuple):
+            object.__setattr__(
+                self,
+                "candidate_intents",
+                tuple(self.candidate_intents),
             )
         # Normalize sequence-like inputs to a tuple to keep deterministic value semantics.
         if not isinstance(self.dispatchable_intents, tuple):

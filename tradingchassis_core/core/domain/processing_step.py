@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, Sequence
 
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.intent_combination import combine_candidate_intents
 from tradingchassis_core.core.domain.processing import process_event_entry
 from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from tradingchassis_core.core.domain.state import StrategyState
@@ -67,6 +68,19 @@ def _select_effective_control_scheduling_obligation(
     )
 
 
+def _resolve_candidate_instrument(
+    *,
+    entry: EventStreamEntry,
+    control_time_queue_context: ControlTimeQueueReevaluationContext | None,
+) -> str | None:
+    event_instrument = getattr(entry.event, "instrument", None)
+    if isinstance(event_instrument, str):
+        return event_instrument
+    if control_time_queue_context is not None:
+        return control_time_queue_context.instrument
+    return None
+
+
 def run_core_step(
     state: StrategyState,
     entry: EventStreamEntry,
@@ -94,15 +108,34 @@ def run_core_step(
         )
         generated_intents = tuple(strategy_evaluator.evaluate(strategy_context))
 
+    snapshot_instrument = _resolve_candidate_instrument(
+        entry=entry,
+        control_time_queue_context=control_time_queue_context,
+    )
+    queued_snapshot = state.queued_intents_snapshot(snapshot_instrument)
+    candidate_intents = combine_candidate_intents(
+        generated_intents=generated_intents,
+        queued_intents=queued_snapshot,
+    )
+
     if not isinstance(entry.event, ControlTimeEvent):
-        return CoreStepResult(generated_intents=generated_intents)
+        return CoreStepResult(
+            generated_intents=generated_intents,
+            candidate_intents=candidate_intents,
+        )
 
     if control_time_queue_context is None:
-        return CoreStepResult(generated_intents=generated_intents)
+        return CoreStepResult(
+            generated_intents=generated_intents,
+            candidate_intents=candidate_intents,
+        )
 
     popped_intents = state.pop_queued_intents(control_time_queue_context.instrument)
     if not popped_intents:
-        return CoreStepResult(generated_intents=generated_intents)
+        return CoreStepResult(
+            generated_intents=generated_intents,
+            candidate_intents=candidate_intents,
+        )
 
     decision = control_time_queue_context.risk_engine.decide_intents(
         raw_intents=popped_intents,
@@ -112,6 +145,7 @@ def run_core_step(
     selected_obligation = _select_effective_control_scheduling_obligation(decision)
     return CoreStepResult(
         generated_intents=generated_intents,
+        candidate_intents=candidate_intents,
         dispatchable_intents=tuple(decision.accepted_now),
         control_scheduling_obligation=selected_obligation,
         compat_gate_decision=decision,

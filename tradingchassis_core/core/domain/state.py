@@ -1082,6 +1082,19 @@ class StrategyState:
         key = f"order:{client_order_id}"
         return any(qi.logical_key == key for qi in q)
 
+    def queued_intents_snapshot(self, instrument: str | None = None) -> tuple[OrderIntent, ...]:
+        """Return queued intents in deterministic stored order without mutation."""
+        if instrument is not None:
+            q = self.queued_intents.get(instrument)
+            if q is None:
+                return ()
+            return tuple(qi.intent for qi in q)
+
+        snapshots: list[OrderIntent] = []
+        for instrument_key in sorted(self.queued_intents):
+            snapshots.extend(qi.intent for qi in self.queued_intents[instrument_key])
+        return tuple(snapshots)
+
     def pop_queued_intents_for_order(self, instrument: str, client_order_id: str) -> list[QueuedIntent]:
         """Remove and return all queued intents for the given order id."""
         q = self.queued_intents.get(instrument)
