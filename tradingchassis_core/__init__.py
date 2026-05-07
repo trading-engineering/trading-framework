@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from tradingchassis_core.core.domain.candidate_intent import (
+    CandidateIntentOrigin,
+    CandidateIntentRecord,
+)
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
 from tradingchassis_core.core.domain.execution_control_decision import (
     ExecutionControlDecision,
@@ -95,6 +99,8 @@ __all__ = [
     "EngineContext",
     "GateDecision",
     "CoreConfiguration",
+    "CandidateIntentOrigin",
+    "CandidateIntentRecord",
     "ProcessingPosition",
     "EventStreamEntry",
     "process_event_entry",

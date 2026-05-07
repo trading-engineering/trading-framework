@@ -9,6 +9,7 @@ import pytest
 import tradingchassis_core as tc
 import tradingchassis_core.core.domain.processing_step as processing_step_module
 from tradingchassis_core.core.domain import run_core_step as domain_run_core_step
+from tradingchassis_core.core.domain.candidate_intent import CandidateIntentOrigin
 from tradingchassis_core.core.domain.event_model import (
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
@@ -197,6 +198,7 @@ def test_run_core_step_delegates_and_returns_default_core_step_result() -> None:
 
     assert isinstance(result, CoreStepResult)
     assert result.generated_intents == ()
+    assert result.candidate_intent_records == ()
     assert result.candidate_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
@@ -222,6 +224,7 @@ def test_run_core_step_omitting_strategy_evaluator_preserves_existing_behavior()
     result = run_core_step(no_strategy_state, entry)
 
     assert result.generated_intents == ()
+    assert result.candidate_intent_records == ()
     assert result.candidate_intents == ()
     assert result.core_step_decision is None
     assert result == CoreStepResult()
@@ -349,6 +352,10 @@ def test_run_core_step_calls_strategy_evaluator_once_with_post_reducer_context()
     assert context.state._last_processing_position_index == 12
     assert context.state.market["BTC-USDC-PERP"].best_bid == 100.0
     assert result.generated_intents == (generated_intent,)
+    assert tuple(record.intent for record in result.candidate_intent_records) == (generated_intent,)
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.GENERATED,
+    )
     assert result.candidate_intents == (generated_intent,)
     assert result.dispatchable_intents == ()
     assert result.core_step_decision is None
@@ -483,6 +490,12 @@ def test_run_core_step_control_time_with_context_processes_canonical_then_queue_
     assert len(popped_raw_intents) == 1
     assert [it.client_order_id for it in popped_raw_intents[0]] == [queued_intent.client_order_id]
     assert tuple(it.client_order_id for it in result.dispatchable_intents) == ("accepted-now",)
+    assert tuple(record.intent.client_order_id for record in result.candidate_intent_records) == (
+        "queued-1",
+    )
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.QUEUED,
+    )
     assert tuple(it.client_order_id for it in result.candidate_intents) == ("queued-1",)
     assert isinstance(result.core_step_decision, CoreStepDecision)
     assert tuple(
@@ -591,6 +604,10 @@ def test_run_core_step_non_control_candidate_context_disabled_keeps_scaffold_beh
     )
 
     assert result.generated_intents == (generated_intent,)
+    assert tuple(record.intent for record in result.candidate_intent_records) == (generated_intent,)
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.GENERATED,
+    )
     assert result.candidate_intents == (generated_intent,)
     assert result.core_step_decision is None
     assert result.compat_gate_decision is None
@@ -673,6 +690,10 @@ def test_run_core_step_non_control_candidate_context_enabled_capture_only_maps_d
         "generated-candidate-risk",
     )
     assert result.generated_intents == (generated_intent,)
+    assert tuple(record.intent for record in result.candidate_intent_records) == (generated_intent,)
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.GENERATED,
+    )
     assert result.candidate_intents == (generated_intent,)
     assert result.compat_gate_decision is not None
     assert result.core_step_decision is not None
@@ -745,6 +766,7 @@ def test_run_core_step_non_control_candidate_context_enabled_empty_candidates_sk
 
     assert calls == {"risk": 0}
     assert result.generated_intents == ()
+    assert result.candidate_intent_records == ()
     assert result.candidate_intents == ()
     assert result.core_step_decision is None
     assert result.compat_gate_decision is None
@@ -899,6 +921,12 @@ def test_run_core_step_includes_queued_snapshot_in_candidate_intents_without_mut
     result = run_core_step(state, entry)
 
     assert tuple(it.client_order_id for it in result.generated_intents) == ()
+    assert tuple(record.intent.client_order_id for record in result.candidate_intent_records) == (
+        "queued-candidate",
+    )
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.QUEUED,
+    )
     assert tuple(it.client_order_id for it in result.candidate_intents) == ("queued-candidate",)
     assert result.dispatchable_intents == ()
     assert state.has_queued_intent(instrument, "queued-candidate")
@@ -935,6 +963,10 @@ def test_run_core_step_candidate_intents_apply_generated_vs_queued_dominance_wit
     result = run_core_step(state, entry, strategy_evaluator=_Evaluator())
 
     assert tuple(it.intent_type for it in result.generated_intents) == ("cancel",)
+    assert tuple(record.intent.intent_type for record in result.candidate_intent_records) == ("cancel",)
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.GENERATED,
+    )
     assert tuple(it.intent_type for it in result.candidate_intents) == ("cancel",)
     assert result.dispatchable_intents == ()
     assert state.has_queued_intent(instrument, key)
@@ -959,7 +991,7 @@ def test_run_core_step_does_not_call_strategy_evaluator_when_process_event_entry
     monkeypatch.setattr(processing_step_module, "process_event_entry", _boom)
     monkeypatch.setattr(
         processing_step_module,
-        "combine_candidate_intents",
+        "combine_candidate_intent_records",
         lambda **_: combine_called.__setitem__("value", combine_called["value"] + 1),
     )
 
@@ -1099,6 +1131,14 @@ def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deter
     assert tuple(it.client_order_id for it in result.generated_intents) == (
         "generated-captured",
     )
+    assert tuple(record.intent.client_order_id for record in result.candidate_intent_records) == (
+        "queued-with-strategy",
+        "generated-captured",
+    )
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        CandidateIntentOrigin.QUEUED,
+        CandidateIntentOrigin.GENERATED,
+    )
     assert tuple(it.client_order_id for it in result.candidate_intents) == (
         "queued-with-strategy",
         "generated-captured",
@@ -1152,7 +1192,7 @@ def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control
 
     monkeypatch.setattr(
         processing_step_module,
-        "combine_candidate_intents",
+        "combine_candidate_intent_records",
         lambda **_: combine_called.__setitem__("value", combine_called["value"] + 1),
     )
 

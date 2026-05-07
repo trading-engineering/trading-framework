@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tradingchassis_core.core.domain.candidate_intent import CandidateIntentRecord
 from tradingchassis_core.core.domain.step_decision import CoreStepDecision
 from tradingchassis_core.core.domain.types import OrderIntent
 from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
@@ -20,6 +21,7 @@ class CoreStepResult:
     """Immutable result object for the future Core processing step API."""
 
     generated_intents: tuple[OrderIntent, ...] = ()
+    candidate_intent_records: tuple[CandidateIntentRecord, ...] = ()
     candidate_intents: tuple[OrderIntent, ...] = ()
     dispatchable_intents: tuple[OrderIntent, ...] = ()
     control_scheduling_obligation: ControlSchedulingObligation | None = None
@@ -33,11 +35,23 @@ class CoreStepResult:
                 "generated_intents",
                 tuple(self.generated_intents),
             )
+        if not isinstance(self.candidate_intent_records, tuple):
+            object.__setattr__(
+                self,
+                "candidate_intent_records",
+                tuple(self.candidate_intent_records),
+            )
         if not isinstance(self.candidate_intents, tuple):
             object.__setattr__(
                 self,
                 "candidate_intents",
                 tuple(self.candidate_intents),
+            )
+        if self.candidate_intent_records:
+            object.__setattr__(
+                self,
+                "candidate_intents",
+                tuple(record.intent for record in self.candidate_intent_records),
             )
         # Normalize sequence-like inputs to a tuple to keep deterministic value semantics.
         if not isinstance(self.dispatchable_intents, tuple):

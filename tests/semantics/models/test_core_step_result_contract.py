@@ -7,6 +7,10 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 import tradingchassis_core as tc
+from tradingchassis_core.core.domain.candidate_intent import (
+    CandidateIntentOrigin,
+    CandidateIntentRecord,
+)
 from tradingchassis_core.core.domain.event_model import (
     canonical_category_for_type,
     is_canonical_stream_candidate_type,
@@ -45,6 +49,7 @@ def test_default_result_is_empty_and_none_compat() -> None:
     result = CoreStepResult()
 
     assert result.generated_intents == ()
+    assert result.candidate_intent_records == ()
     assert result.candidate_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
@@ -95,6 +100,62 @@ def test_generated_intents_are_distinct_from_dispatchable_intents() -> None:
     assert result.dispatchable_intents == (dispatchable,)
 
 
+def test_candidate_intent_records_normalize_to_tuple() -> None:
+    intent = _new_intent(client_order_id="record-candidate")
+    record = CandidateIntentRecord(
+        intent=intent,
+        origin=CandidateIntentOrigin.GENERATED,
+        logical_key=f"order:{intent.client_order_id}",
+        merge_index=0,
+        priority=2,
+    )
+    result = CoreStepResult(candidate_intent_records=[record])
+
+    assert isinstance(result.candidate_intent_records, tuple)
+    assert result.candidate_intent_records == (record,)
+
+
+def test_candidate_intents_follow_candidate_intent_records_when_present() -> None:
+    record_intent = _new_intent(client_order_id="record-wins-intent-view")
+    stale_view_intent = _new_intent(client_order_id="stale-candidate-view")
+    record = CandidateIntentRecord(
+        intent=record_intent,
+        origin=CandidateIntentOrigin.QUEUED,
+        logical_key=f"order:{record_intent.client_order_id}",
+        merge_index=4,
+        priority=2,
+    )
+    result = CoreStepResult(
+        candidate_intent_records=[record],
+        candidate_intents=[stale_view_intent],
+    )
+
+    assert result.candidate_intent_records == (record,)
+    assert result.candidate_intents == (record_intent,)
+
+
+def test_candidate_intent_records_are_distinct_from_dispatchable_intents() -> None:
+    candidate_intent = _new_intent(client_order_id="candidate-record-only")
+    dispatchable_intent = _new_intent(client_order_id="dispatchable-only")
+    record = CandidateIntentRecord(
+        intent=candidate_intent,
+        origin=CandidateIntentOrigin.GENERATED,
+        logical_key=f"order:{candidate_intent.client_order_id}",
+        merge_index=1,
+        priority=2,
+    )
+    result = CoreStepResult(
+        candidate_intent_records=[record],
+        dispatchable_intents=[dispatchable_intent],
+    )
+
+    assert tuple(r.intent.client_order_id for r in result.candidate_intent_records) == (
+        "candidate-record-only",
+    )
+    assert tuple(i.client_order_id for i in result.candidate_intents) == ("candidate-record-only",)
+    assert tuple(i.client_order_id for i in result.dispatchable_intents) == ("dispatchable-only",)
+
+
 def test_generated_intents_accept_new_replace_cancel_intents() -> None:
     new_intent = _new_intent(client_order_id="new-intent")
     replace_intent = ReplaceOrderIntent(
@@ -137,6 +198,25 @@ def test_candidate_intents_are_not_dispatchable_by_default() -> None:
 
     assert result.candidate_intents == (candidate,)
     assert result.dispatchable_intents == ()
+
+
+def test_candidate_intent_origin_values_are_stable() -> None:
+    assert CandidateIntentOrigin.GENERATED.value == "generated"
+    assert CandidateIntentOrigin.QUEUED.value == "queued"
+
+
+def test_candidate_intent_record_is_immutable() -> None:
+    candidate_intent = _new_intent(client_order_id="immutable-candidate-record")
+    record = CandidateIntentRecord(
+        intent=candidate_intent,
+        origin=CandidateIntentOrigin.GENERATED,
+        logical_key=f"order:{candidate_intent.client_order_id}",
+        merge_index=0,
+        priority=2,
+    )
+
+    with pytest.raises(FrozenInstanceError):
+        record.merge_index = 7
 
 
 def test_can_carry_optional_control_scheduling_obligation() -> None:
@@ -205,6 +285,24 @@ def test_canonical_processing_boundary_rejects_core_step_result() -> None:
 
     with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
         process_canonical_event(state, CoreStepResult())
+
+
+def test_candidate_intent_record_is_non_canonical_and_rejected_if_misrouted() -> None:
+    candidate_intent = _new_intent(client_order_id="candidate-record-boundary")
+    candidate_record = CandidateIntentRecord(
+        intent=candidate_intent,
+        origin=CandidateIntentOrigin.GENERATED,
+        logical_key=f"order:{candidate_intent.client_order_id}",
+        merge_index=0,
+        priority=2,
+    )
+    state = StrategyState(event_bus=NullEventBus())
+
+    assert is_canonical_stream_candidate_type(CandidateIntentRecord) is False
+    assert canonical_category_for_type(CandidateIntentRecord) is None
+
+    with pytest.raises(TypeError, match="Unsupported non-canonical event type"):
+        process_canonical_event(state, candidate_record)
 
 
 def test_public_root_export_identity_when_root_exported() -> None:

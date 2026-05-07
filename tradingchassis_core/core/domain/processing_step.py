@@ -14,7 +14,9 @@ from tradingchassis_core.core.domain.configuration import CoreConfiguration
 from tradingchassis_core.core.domain.execution_control_decision import (
     map_compat_gate_decision_to_execution_control_decision,
 )
-from tradingchassis_core.core.domain.intent_combination import combine_candidate_intents
+from tradingchassis_core.core.domain.intent_combination import (
+    combine_candidate_intent_records,
+)
 from tradingchassis_core.core.domain.policy_risk_decision import (
     map_compat_gate_decision_to_policy_risk_decision,
 )
@@ -157,10 +159,11 @@ def run_core_step(
         control_time_queue_context=control_time_queue_context,
     )
     queued_snapshot = state.queued_intents_snapshot(snapshot_instrument)
-    candidate_intents = combine_candidate_intents(
+    candidate_intent_records = combine_candidate_intent_records(
         generated_intents=generated_intents,
         queued_intents=queued_snapshot,
     )
+    candidate_intents = tuple(record.intent for record in candidate_intent_records)
 
     # Preserve the existing ControlTimeEvent compatibility path behavior.
     if isinstance(entry.event, ControlTimeEvent) and control_time_queue_context is not None:
@@ -168,6 +171,7 @@ def run_core_step(
         if not popped_intents:
             return CoreStepResult(
                 generated_intents=generated_intents,
+                candidate_intent_records=candidate_intent_records,
                 candidate_intents=candidate_intents,
             )
 
@@ -183,6 +187,7 @@ def run_core_step(
         )
         return CoreStepResult(
             generated_intents=generated_intents,
+            candidate_intent_records=candidate_intent_records,
             candidate_intents=candidate_intents,
             dispatchable_intents=tuple(decision.accepted_now),
             control_scheduling_obligation=selected_obligation,
@@ -212,17 +217,20 @@ def run_core_step(
             )
             return CoreStepResult(
                 generated_intents=generated_intents,
+                candidate_intent_records=candidate_intent_records,
                 candidate_intents=candidate_intents,
                 core_step_decision=core_step_decision,
                 compat_gate_decision=decision,
             )
         return CoreStepResult(
             generated_intents=generated_intents,
+            candidate_intent_records=candidate_intent_records,
             candidate_intents=candidate_intents,
         )
 
     if control_time_queue_context is None:
         return CoreStepResult(
             generated_intents=generated_intents,
+            candidate_intent_records=candidate_intent_records,
             candidate_intents=candidate_intents,
         )
