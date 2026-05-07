@@ -2277,3 +2277,109 @@ def test_run_core_step_apply_path_does_not_call_risk_decide_intents_or_emit_risk
     assert result.core_step_decision is not None
     assert result.compat_gate_decision is None
     assert all(not isinstance(event, RiskDecisionEvent) for event in sink.events)
+
+
+def test_run_core_step_apply_path_policy_failure_short_circuits_plan_and_apply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    generated_intent = _new_intent(client_order_id="policy-boom-generated")
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 64
+            return [generated_intent]
+
+    class _PolicyBoom:
+        def evaluate_policy_intent(self, **_: object) -> tuple[bool, str | None]:
+            raise RuntimeError("policy evaluator failed")
+
+    def _planner_must_not_run(*_: object, **__: object) -> object:
+        raise AssertionError("planner must not run when policy admission fails")
+
+    def _apply_must_not_run(*_: object, **__: object) -> object:
+        raise AssertionError("apply must not run when policy admission fails")
+
+    monkeypatch.setattr(
+        processing_step_module,
+        "plan_execution_control_candidates",
+        _planner_must_not_run,
+    )
+    monkeypatch.setattr(
+        processing_step_module,
+        "apply_execution_control_plan",
+        _apply_must_not_run,
+    )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=64),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-policy-fail-short-circuit",
+            ts_ns_local=64,
+            ts_ns_exch=63,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="policy evaluator failed"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_Evaluator(),
+            policy_admission_context=CorePolicyAdmissionContext(
+                policy_evaluator=_PolicyBoom(),  # type: ignore[arg-type]
+                now_ts_ns_local=64,
+            ),
+            execution_control_apply_context=CoreExecutionControlApplyContext(
+                execution_control=ExecutionControl(),
+                now_ts_ns_local=64,
+            ),
+        )
+
+
+def test_run_core_step_apply_path_apply_failure_propagates_without_partial_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    generated_intent = _new_intent(client_order_id="apply-boom-generated")
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 65
+            return [generated_intent]
+
+    class _PolicyOk:
+        def evaluate_policy_intent(self, **_: object) -> tuple[bool, str | None]:
+            return True, None
+
+    def _apply_boom(*_: object, **__: object) -> object:
+        raise RuntimeError("apply failed")
+
+    monkeypatch.setattr(
+        processing_step_module,
+        "apply_execution_control_plan",
+        _apply_boom,
+    )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=65),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-apply-fail-propagates",
+            ts_ns_local=65,
+            ts_ns_exch=64,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="apply failed"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_Evaluator(),
+            policy_admission_context=CorePolicyAdmissionContext(
+                policy_evaluator=_PolicyOk(),  # type: ignore[arg-type]
+                now_ts_ns_local=65,
+            ),
+            execution_control_apply_context=CoreExecutionControlApplyContext(
+                execution_control=ExecutionControl(),
+                now_ts_ns_local=65,
+            ),
+        )
