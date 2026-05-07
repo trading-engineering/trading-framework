@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, Sequence
 
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.execution_control_decision import (
+    map_compat_gate_decision_to_execution_control_decision,
+)
 from tradingchassis_core.core.domain.intent_combination import combine_candidate_intents
 from tradingchassis_core.core.domain.policy_risk_decision import (
     map_compat_gate_decision_to_policy_risk_decision,
@@ -93,6 +96,10 @@ def _map_compat_gate_decision_to_core_step_decision(
     return CoreStepDecision(
         policy_rejected_intents=tuple(rejected.intent for rejected in decision.rejected),
         policy_risk_decision=map_compat_gate_decision_to_policy_risk_decision(decision),
+        execution_control_decision=map_compat_gate_decision_to_execution_control_decision(
+            decision,
+            control_scheduling_obligation=control_scheduling_obligation,
+        ),
         queued_effective_intents=tuple(decision.queued),
         dispatchable_intents=tuple(decision.accepted_now),
         execution_handled_intents=tuple(decision.handled_in_queue),

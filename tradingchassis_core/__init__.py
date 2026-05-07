@@ -9,6 +9,9 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.execution_control_decision import (
+    ExecutionControlDecision,
+)
 from tradingchassis_core.core.domain.policy_risk_decision import PolicyRiskDecision
 from tradingchassis_core.core.domain.processing import (
     fold_event_stream_entries,
@@ -96,6 +99,7 @@ __all__ = [
     "process_event_entry",
     "run_core_step",
     "ControlTimeQueueReevaluationContext",
+    "ExecutionControlDecision",
     "PolicyRiskDecision",
     "CoreStepDecision",
     "fold_event_stream_entries",
