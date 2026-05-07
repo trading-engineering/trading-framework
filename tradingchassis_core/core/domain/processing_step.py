@@ -14,6 +14,10 @@ from tradingchassis_core.core.domain.configuration import CoreConfiguration
 from tradingchassis_core.core.domain.execution_control_decision import (
     map_compat_gate_decision_to_execution_control_decision,
 )
+from tradingchassis_core.core.domain.execution_control_plan import (
+    ExecutionControlCandidateInput,
+    plan_execution_control_candidates,
+)
 from tradingchassis_core.core.domain.intent_combination import (
     combine_candidate_intent_records,
 )
@@ -223,11 +227,18 @@ def run_core_step(
                 now_ts_ns_local=policy_admission_context.now_ts_ns_local,
                 policy_evaluator=policy_admission_context.policy_evaluator,
             )
+            execution_control_plan = plan_execution_control_candidates(
+                ExecutionControlCandidateInput(
+                    accepted_generated=policy_result.accepted_generated,
+                    passthrough_queued=policy_result.passthrough_queued,
+                )
+            )
             core_step_decision = CoreStepDecision(
                 policy_rejected_intents=tuple(
                     rejected.record.intent for rejected in policy_result.rejected_generated
                 ),
                 policy_risk_decision=policy_result.policy_risk_decision,
+                execution_control_decision=execution_control_plan.execution_control_decision,
             )
             return CoreStepResult(
                 generated_intents=generated_intents,

@@ -1553,7 +1553,26 @@ def test_run_core_step_policy_admission_context_populates_policy_decision_only()
         "generated-new-rejected",
     )
     assert result.core_step_decision is not None
-    assert result.core_step_decision.execution_control_decision is None
+    assert result.core_step_decision.execution_control_decision is not None
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.execution_control_decision.queued_effective_intents
+    ) == (
+        "generated-cancel-accepted",
+        "queued-passthrough",
+    )
+    assert (
+        result.core_step_decision.execution_control_decision.dispatchable_intents
+        == ()
+    )
+    assert (
+        result.core_step_decision.execution_control_decision.execution_handled_intents
+        == ()
+    )
+    assert (
+        result.core_step_decision.execution_control_decision.control_scheduling_obligation
+        is None
+    )
     assert tuple(it.client_order_id for it in result.core_step_decision.policy_rejected_intents) == (
         "generated-new-rejected",
     )
@@ -1566,6 +1585,10 @@ def test_run_core_step_policy_admission_context_populates_policy_decision_only()
         it.client_order_id
         for it in result.core_step_decision.policy_risk_decision.rejected_intents
     ) == ("generated-new-rejected",)
+    assert result.core_step_decision.queued_effective_intents == ()
+    assert result.core_step_decision.dispatchable_intents == ()
+    assert result.core_step_decision.execution_handled_intents == ()
+    assert result.core_step_decision.control_scheduling_obligation is None
     assert result.core_step_decision.dispatchable_intents == ()
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is None
@@ -1611,6 +1634,20 @@ def test_run_core_step_policy_admission_context_queued_only_skips_policy_evaluat
     assert result.core_step_decision is not None
     assert result.core_step_decision.policy_risk_decision == PolicyRiskDecision()
     assert result.core_step_decision.policy_rejected_intents == ()
+    assert result.core_step_decision.execution_control_decision is not None
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.execution_control_decision.queued_effective_intents
+    ) == ("queued-only-record",)
+    assert result.core_step_decision.execution_control_decision.dispatchable_intents == ()
+    assert (
+        result.core_step_decision.execution_control_decision.execution_handled_intents
+        == ()
+    )
+    assert (
+        result.core_step_decision.execution_control_decision.control_scheduling_obligation
+        is None
+    )
     assert result.dispatchable_intents == ()
 
 
@@ -1651,6 +1688,47 @@ def test_run_core_step_policy_admission_context_not_reached_when_process_event_e
     assert calls == {"evaluate": 0}
 
 
+def test_run_core_step_policy_planner_not_reached_when_process_event_entry_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    calls = {"planner": 0}
+
+    def _boom(*_: object, **__: object) -> None:
+        raise RuntimeError("process boundary failed")
+
+    def _planner_spy(*_: object, **__: object) -> object:
+        calls["planner"] += 1
+        raise AssertionError("planner must not run when boundary fails")
+
+    monkeypatch.setattr(processing_step_module, "process_event_entry", _boom)
+    monkeypatch.setattr(
+        processing_step_module,
+        "plan_execution_control_candidates",
+        _planner_spy,
+    )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=55),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-policy-planner-process-fail",
+            ts_ns_local=55,
+            ts_ns_exch=54,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="process boundary failed"):
+        run_core_step(
+            state,
+            entry,
+            policy_admission_context=CorePolicyAdmissionContext(
+                policy_evaluator=object(),  # type: ignore[arg-type]
+                now_ts_ns_local=55,
+            ),
+        )
+    assert calls == {"planner": 0}
+
+
 def test_run_core_step_policy_admission_context_not_reached_when_strategy_fails() -> None:
     state = StrategyState(event_bus=NullEventBus())
     calls = {"evaluate": 0}
@@ -1685,6 +1763,49 @@ def test_run_core_step_policy_admission_context_not_reached_when_strategy_fails(
             ),
         )
     assert calls == {"evaluate": 0}
+
+
+def test_run_core_step_policy_planner_not_reached_when_strategy_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    calls = {"planner": 0}
+
+    class _EvaluatorBoom:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 56
+            raise RuntimeError("strategy evaluator failed")
+
+    def _planner_spy(*_: object, **__: object) -> object:
+        calls["planner"] += 1
+        raise AssertionError("planner must not run when strategy evaluation fails")
+
+    monkeypatch.setattr(
+        processing_step_module,
+        "plan_execution_control_candidates",
+        _planner_spy,
+    )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=56),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-policy-planner-strategy-fail",
+            ts_ns_local=56,
+            ts_ns_exch=55,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="strategy evaluator failed"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_EvaluatorBoom(),
+            policy_admission_context=CorePolicyAdmissionContext(
+                policy_evaluator=object(),  # type: ignore[arg-type]
+                now_ts_ns_local=56,
+            ),
+        )
+    assert calls == {"planner": 0}
 
 
 def test_run_core_step_policy_admission_context_is_side_effect_safe_characterization() -> None:
