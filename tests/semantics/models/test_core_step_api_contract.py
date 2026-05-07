@@ -1900,7 +1900,7 @@ def test_run_core_step_apply_context_requires_policy_admission_context() -> None
         )
 
 
-def test_run_core_step_apply_context_rejects_control_time_event_path() -> None:
+def test_run_core_step_control_time_rejects_mixed_compat_and_unified_contexts() -> None:
     state = StrategyState(event_bus=NullEventBus())
     entry = EventStreamEntry(
         position=ProcessingPosition(index=58),
@@ -1917,7 +1917,10 @@ def test_run_core_step_apply_context_rejects_control_time_event_path() -> None:
 
     with pytest.raises(
         ValueError,
-        match="execution_control_apply_context is not supported for ControlTimeEvent",
+        match=(
+            "control_time_queue_context cannot be combined with "
+            "policy_admission_context or execution_control_apply_context"
+        ),
     ):
         run_core_step(
             state,
@@ -1936,6 +1939,97 @@ def test_run_core_step_apply_context_rejects_control_time_event_path() -> None:
                 now_ts_ns_local=58,
             ),
         )
+
+
+def test_run_core_step_control_time_accepts_policy_and_apply_context_and_emits_dispatchables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    queued_intent = _new_intent(client_order_id="queued-control-unified")
+    state.merge_intents_into_queue(instrument, [queued_intent])
+    obligation = ControlSchedulingObligation(
+        due_ts_ns_local=77,
+        reason="rate_limit",
+        scope_key=f"instrument:{instrument}",
+        source="execution_control_rate_limit",
+    )
+    apply_calls = {"count": 0}
+
+    class _PolicyEvaluator:
+        def evaluate_policy_intent(
+            self,
+            *,
+            intent: OrderIntent,
+            state: StrategyState,
+            now_ts_ns_local: int,
+        ) -> tuple[bool, str | None]:
+            _ = (intent, state, now_ts_ns_local)
+            return True, None
+
+    def _apply_spy(
+        plan: object,
+        context: object,
+    ) -> ExecutionControlApplyResult:
+        _ = context
+        apply_calls["count"] += 1
+        active_records = plan.active_records  # type: ignore[attr-defined]
+        dispatchable = (
+            ExecutionControlDispatchableRecord(record=active_records[0]),
+        )
+        decision = ExecutionControlDecision(
+            queued_effective_intents=tuple(record.intent for record in active_records),
+            dispatchable_intents=tuple(item.record.intent for item in dispatchable),
+            execution_handled_intents=(),
+            control_scheduling_obligation=obligation,
+        )
+        return ExecutionControlApplyResult(
+            queued_effective_records=tuple(active_records),
+            dispatchable_records=dispatchable,
+            execution_handled_records=(),
+            blocked_records=(),
+            control_scheduling_obligation=obligation,
+            execution_control_decision=decision,
+        )
+
+    monkeypatch.setattr(
+        processing_step_module,
+        "apply_execution_control_plan",
+        _apply_spy,
+    )
+    monkeypatch.setattr(
+        state,
+        "pop_queued_intents",
+        lambda _: (_ for _ in ()).throw(
+            AssertionError("compatibility control-time queue path must not run")
+        ),
+    )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=58),
+        event=_control_time_event(due_ts_ns_local=58, realized_ts_ns_local=58),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        policy_admission_context=CorePolicyAdmissionContext(
+            policy_evaluator=_PolicyEvaluator(),  # type: ignore[arg-type]
+            now_ts_ns_local=58,
+        ),
+        execution_control_apply_context=CoreExecutionControlApplyContext(
+            execution_control=ExecutionControl(),
+            now_ts_ns_local=58,
+            activate_dispatchable_outputs=True,
+        ),
+    )
+
+    assert apply_calls["count"] == 1
+    assert tuple(it.client_order_id for it in result.dispatchable_intents) == (
+        queued_intent.client_order_id,
+    )
+    assert result.control_scheduling_obligation == obligation
+    assert result.compat_gate_decision is None
+    assert result.core_step_decision is not None
 
 
 def test_run_core_step_apply_integration_orders_policy_plan_apply_and_maps_result() -> None:

@@ -178,11 +178,17 @@ def run_core_step(
         raise ValueError(
             "execution_control_apply_context requires policy_admission_context"
         )
-    if execution_control_apply_context is not None and isinstance(
-        entry.event, ControlTimeEvent
+    if (
+        isinstance(entry.event, ControlTimeEvent)
+        and control_time_queue_context is not None
+        and (
+            policy_admission_context is not None
+            or execution_control_apply_context is not None
+        )
     ):
         raise ValueError(
-            "execution_control_apply_context is not supported for ControlTimeEvent"
+            "control_time_queue_context cannot be combined with "
+            "policy_admission_context or execution_control_apply_context"
         )
 
     process_event_entry(state, entry, configuration=configuration)
@@ -238,88 +244,88 @@ def run_core_step(
             compat_gate_decision=decision,
         )
 
+    if (
+        policy_admission_context is not None
+        and core_decision_context is not None
+        and core_decision_context.enable_candidate_intent_decision
+    ):
+        raise ValueError(
+            "policy_admission_context cannot be combined with "
+            "core_decision_context.enable_candidate_intent_decision=True"
+        )
+    if policy_admission_context is not None:
+        policy_result = apply_policy_to_candidate_records(
+            candidate_intent_records,
+            state=state,
+            now_ts_ns_local=policy_admission_context.now_ts_ns_local,
+            policy_evaluator=policy_admission_context.policy_evaluator,
+        )
+        execution_control_plan = plan_execution_control_candidates(
+            ExecutionControlCandidateInput(
+                accepted_generated=policy_result.accepted_generated,
+                passthrough_queued=policy_result.passthrough_queued,
+            )
+        )
+        apply_result = None
+        if execution_control_apply_context is not None:
+            apply_result = apply_execution_control_plan(
+                execution_control_plan,
+                ExecutionControlApplyContext(
+                    state=state,
+                    execution_control=execution_control_apply_context.execution_control,
+                    now_ts_ns_local=execution_control_apply_context.now_ts_ns_local,
+                    max_orders_per_sec=execution_control_apply_context.max_orders_per_sec,
+                    max_cancels_per_sec=execution_control_apply_context.max_cancels_per_sec,
+                ),
+            )
+        core_step_decision = CoreStepDecision(
+            policy_rejected_intents=tuple(
+                rejected.record.intent for rejected in policy_result.rejected_generated
+            ),
+            policy_risk_decision=policy_result.policy_risk_decision,
+            execution_control_decision=(
+                execution_control_plan.execution_control_decision
+                if apply_result is None
+                else apply_result.execution_control_decision
+            ),
+            queued_effective_intents=(
+                ()
+                if apply_result is None
+                else apply_result.execution_control_decision.queued_effective_intents
+            ),
+            dispatchable_intents=(
+                ()
+                if apply_result is None
+                else apply_result.execution_control_decision.dispatchable_intents
+            ),
+            execution_handled_intents=(
+                ()
+                if apply_result is None
+                else apply_result.execution_control_decision.execution_handled_intents
+            ),
+            control_scheduling_obligation=(
+                None
+                if apply_result is None
+                else apply_result.control_scheduling_obligation
+            ),
+        )
+        dispatchable_intents: tuple[OrderIntent, ...] = ()
+        control_scheduling_obligation = None
+        if apply_result is not None:
+            control_scheduling_obligation = apply_result.control_scheduling_obligation
+            if execution_control_apply_context.activate_dispatchable_outputs:
+                dispatchable_intents = tuple(
+                    record.record.intent for record in apply_result.dispatchable_records
+                )
+        return CoreStepResult(
+            generated_intents=generated_intents,
+            candidate_intent_records=candidate_intent_records,
+            candidate_intents=candidate_intents,
+            dispatchable_intents=dispatchable_intents,
+            control_scheduling_obligation=control_scheduling_obligation,
+            core_step_decision=core_step_decision,
+        )
     if not isinstance(entry.event, ControlTimeEvent):
-        if (
-            policy_admission_context is not None
-            and core_decision_context is not None
-            and core_decision_context.enable_candidate_intent_decision
-        ):
-            raise ValueError(
-                "policy_admission_context cannot be combined with "
-                "core_decision_context.enable_candidate_intent_decision=True"
-            )
-        if policy_admission_context is not None:
-            policy_result = apply_policy_to_candidate_records(
-                candidate_intent_records,
-                state=state,
-                now_ts_ns_local=policy_admission_context.now_ts_ns_local,
-                policy_evaluator=policy_admission_context.policy_evaluator,
-            )
-            execution_control_plan = plan_execution_control_candidates(
-                ExecutionControlCandidateInput(
-                    accepted_generated=policy_result.accepted_generated,
-                    passthrough_queued=policy_result.passthrough_queued,
-                )
-            )
-            apply_result = None
-            if execution_control_apply_context is not None:
-                apply_result = apply_execution_control_plan(
-                    execution_control_plan,
-                    ExecutionControlApplyContext(
-                        state=state,
-                        execution_control=execution_control_apply_context.execution_control,
-                        now_ts_ns_local=execution_control_apply_context.now_ts_ns_local,
-                        max_orders_per_sec=execution_control_apply_context.max_orders_per_sec,
-                        max_cancels_per_sec=execution_control_apply_context.max_cancels_per_sec,
-                    ),
-                )
-            core_step_decision = CoreStepDecision(
-                policy_rejected_intents=tuple(
-                    rejected.record.intent for rejected in policy_result.rejected_generated
-                ),
-                policy_risk_decision=policy_result.policy_risk_decision,
-                execution_control_decision=(
-                    execution_control_plan.execution_control_decision
-                    if apply_result is None
-                    else apply_result.execution_control_decision
-                ),
-                queued_effective_intents=(
-                    ()
-                    if apply_result is None
-                    else apply_result.execution_control_decision.queued_effective_intents
-                ),
-                dispatchable_intents=(
-                    ()
-                    if apply_result is None
-                    else apply_result.execution_control_decision.dispatchable_intents
-                ),
-                execution_handled_intents=(
-                    ()
-                    if apply_result is None
-                    else apply_result.execution_control_decision.execution_handled_intents
-                ),
-                control_scheduling_obligation=(
-                    None
-                    if apply_result is None
-                    else apply_result.control_scheduling_obligation
-                ),
-            )
-            dispatchable_intents: tuple[OrderIntent, ...] = ()
-            control_scheduling_obligation = None
-            if apply_result is not None:
-                control_scheduling_obligation = apply_result.control_scheduling_obligation
-                if execution_control_apply_context.activate_dispatchable_outputs:
-                    dispatchable_intents = tuple(
-                        record.record.intent for record in apply_result.dispatchable_records
-                    )
-            return CoreStepResult(
-                generated_intents=generated_intents,
-                candidate_intent_records=candidate_intent_records,
-                candidate_intents=candidate_intents,
-                dispatchable_intents=dispatchable_intents,
-                control_scheduling_obligation=control_scheduling_obligation,
-                core_step_decision=core_step_decision,
-            )
         if (
             core_decision_context is not None
             and core_decision_context.enable_candidate_intent_decision
