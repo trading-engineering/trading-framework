@@ -23,6 +23,7 @@ from tradingchassis_core.core.domain.processing_order import (
 )
 from tradingchassis_core.core.domain.processing_step import (
     ControlTimeQueueReevaluationContext,
+    CoreDecisionContext,
     run_core_step,
 )
 
@@ -98,6 +99,7 @@ __all__ = [
     "EventStreamEntry",
     "process_event_entry",
     "run_core_step",
+    "CoreDecisionContext",
     "ControlTimeQueueReevaluationContext",
     "ExecutionControlDecision",
     "PolicyRiskDecision",

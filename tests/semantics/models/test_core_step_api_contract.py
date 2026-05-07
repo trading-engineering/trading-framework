@@ -21,6 +21,7 @@ from tradingchassis_core.core.domain.processing import process_event_entry
 from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from tradingchassis_core.core.domain.processing_step import (
     ControlTimeQueueReevaluationContext,
+    CoreDecisionContext,
     CoreStepStrategyContext,
     run_core_step,
 )
@@ -33,13 +34,16 @@ from tradingchassis_core.core.domain.types import (
     FillEvent,
     MarketEvent,
     NewOrderIntent,
+    NotionalLimits,
+    OrderRateLimits,
     OrderStateEvent,
     Price,
     Quantity,
 )
 from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
 from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
-from tradingchassis_core.core.risk.risk_engine import GateDecision, RejectedIntent
+from tradingchassis_core.core.risk.risk_config import RiskConfig
+from tradingchassis_core.core.risk.risk_engine import GateDecision, RejectedIntent, RiskEngine
 
 
 def _book_market_event(*, instrument: str, ts_ns_local: int, ts_ns_exch: int) -> MarketEvent:
@@ -552,6 +556,237 @@ def test_run_core_step_non_control_time_ignores_control_time_context() -> None:
     assert result.core_step_decision is None
 
 
+def test_run_core_step_non_control_candidate_context_disabled_keeps_scaffold_behavior() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    generated_intent = _new_intent(client_order_id="generated-disabled-context")
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 40
+            return [generated_intent]
+
+    class _RiskMustNotRun:
+        def decide_intents(self, **_: object) -> GateDecision:
+            raise AssertionError("risk must not run when candidate decision context is disabled")
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=40),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-disabled-context",
+            ts_ns_local=40,
+            ts_ns_exch=39,
+        ),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        strategy_evaluator=_Evaluator(),
+        core_decision_context=CoreDecisionContext(
+            risk_engine=_RiskMustNotRun(),  # type: ignore[arg-type]
+            now_ts_ns_local=40,
+            enable_candidate_intent_decision=False,
+            capture_only=True,
+        ),
+    )
+
+    assert result.generated_intents == (generated_intent,)
+    assert result.candidate_intents == (generated_intent,)
+    assert result.core_step_decision is None
+    assert result.compat_gate_decision is None
+    assert result.dispatchable_intents == ()
+    assert result.control_scheduling_obligation is None
+
+
+def test_run_core_step_non_control_candidate_context_enabled_capture_only_maps_decision() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    generated_intent = _new_intent(client_order_id="generated-candidate-risk")
+    accepted_now = _new_intent(client_order_id="accepted-now-candidate")
+    queued_effective = _new_intent(client_order_id="queued-effective-candidate")
+    rejected_intent = _new_intent(client_order_id="rejected-candidate")
+    handled_intent = CancelOrderIntent(
+        ts_ns_local=41,
+        instrument="BTC-USDC-PERP",
+        client_order_id="handled-candidate",
+        intents_correlation_id="corr-handled-candidate",
+    )
+    obligation = ControlSchedulingObligation(
+        due_ts_ns_local=77,
+        reason="rate_limit",
+        scope_key="instrument:BTC-USDC-PERP",
+        source="execution_control_rate_limit",
+    )
+    captured_raw_intents: list[list[NewOrderIntent]] = []
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 41
+            return [generated_intent]
+
+    class _RiskSpy:
+        def decide_intents(
+            self,
+            *,
+            raw_intents: list[NewOrderIntent],
+            state: StrategyState,
+            now_ts_ns_local: int,
+        ) -> GateDecision:
+            assert state is not None
+            assert now_ts_ns_local == 41
+            captured_raw_intents.append(list(raw_intents))
+            return GateDecision(
+                ts_ns_local=now_ts_ns_local,
+                accepted_now=[accepted_now],
+                queued=[queued_effective],
+                rejected=[RejectedIntent(intent=rejected_intent, reason="policy_reject")],
+                replaced_in_queue=[],
+                dropped_in_queue=[],
+                handled_in_queue=[handled_intent],
+                execution_rejected=[],
+                next_send_ts_ns_local=77,
+                control_scheduling_obligations=(obligation,),
+            )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=41),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-candidate-risk",
+            ts_ns_local=41,
+            ts_ns_exch=40,
+        ),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        strategy_evaluator=_Evaluator(),
+        core_decision_context=CoreDecisionContext(
+            risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+            now_ts_ns_local=41,
+            enable_candidate_intent_decision=True,
+            capture_only=True,
+        ),
+    )
+
+    assert len(captured_raw_intents) == 1
+    assert tuple(it.client_order_id for it in captured_raw_intents[0]) == (
+        "generated-candidate-risk",
+    )
+    assert result.generated_intents == (generated_intent,)
+    assert result.candidate_intents == (generated_intent,)
+    assert result.compat_gate_decision is not None
+    assert result.core_step_decision is not None
+    assert tuple(
+        it.client_order_id for it in result.core_step_decision.dispatchable_intents
+    ) == ("accepted-now-candidate",)
+    assert tuple(
+        it.client_order_id for it in result.core_step_decision.queued_effective_intents
+    ) == ("queued-effective-candidate",)
+    assert tuple(
+        it.client_order_id for it in result.core_step_decision.policy_rejected_intents
+    ) == ("rejected-candidate",)
+    assert tuple(
+        it.client_order_id for it in result.core_step_decision.execution_handled_intents
+    ) == ("handled-candidate",)
+    assert result.core_step_decision.policy_risk_decision is not None
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.policy_risk_decision.accepted_intents
+    ) == ("accepted-now-candidate",)
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.policy_risk_decision.rejected_intents
+    ) == ("rejected-candidate",)
+    assert result.core_step_decision.execution_control_decision is not None
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.execution_control_decision.dispatchable_intents
+    ) == ("accepted-now-candidate",)
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.execution_control_decision.queued_effective_intents
+    ) == ("queued-effective-candidate",)
+    assert tuple(
+        it.client_order_id
+        for it in result.core_step_decision.execution_control_decision.execution_handled_intents
+    ) == ("handled-candidate",)
+    assert result.dispatchable_intents == ()
+    assert result.control_scheduling_obligation is None
+
+
+def test_run_core_step_non_control_candidate_context_enabled_empty_candidates_skips_risk() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    calls = {"risk": 0}
+
+    class _RiskSpy:
+        def decide_intents(self, **_: object) -> GateDecision:
+            calls["risk"] += 1
+            raise AssertionError("risk must not run when candidate intents are empty")
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=42),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-empty-candidates",
+            ts_ns_local=42,
+            ts_ns_exch=41,
+        ),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        core_decision_context=CoreDecisionContext(
+            risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+            now_ts_ns_local=42,
+            enable_candidate_intent_decision=True,
+            capture_only=True,
+        ),
+    )
+
+    assert calls == {"risk": 0}
+    assert result.generated_intents == ()
+    assert result.candidate_intents == ()
+    assert result.core_step_decision is None
+    assert result.compat_gate_decision is None
+    assert result.dispatchable_intents == ()
+
+
+def test_run_core_step_non_control_candidate_context_capture_only_false_not_supported() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    generated_intent = _new_intent(client_order_id="generated-capture-false")
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 43
+            return [generated_intent]
+
+    class _RiskMustNotRun:
+        def decide_intents(self, **_: object) -> GateDecision:
+            raise AssertionError("risk must not run when capture_only=False is unsupported")
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=43),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-capture-false",
+            ts_ns_local=43,
+            ts_ns_exch=42,
+        ),
+    )
+    with pytest.raises(NotImplementedError, match="capture_only=False is not supported yet"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_Evaluator(),
+            core_decision_context=CoreDecisionContext(
+                risk_engine=_RiskMustNotRun(),  # type: ignore[arg-type]
+                now_ts_ns_local=43,
+                enable_candidate_intent_decision=True,
+                capture_only=False,
+            ),
+        )
+
+
 def test_run_core_step_control_time_maps_compat_fields_to_core_step_decision() -> None:
     state = StrategyState(event_bus=NullEventBus())
     instrument = "BTC-USDC-PERP"
@@ -745,6 +980,56 @@ def test_run_core_step_does_not_call_strategy_evaluator_when_process_event_entry
     assert combine_called == {"value": 0}
 
 
+def test_run_core_step_candidate_decision_context_not_reached_when_process_event_entry_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    calls = {"risk": 0}
+
+    class _RiskSpy:
+        def decide_intents(self, **_: object) -> GateDecision:
+            calls["risk"] += 1
+            return GateDecision(
+                ts_ns_local=99,
+                accepted_now=[],
+                queued=[],
+                rejected=[],
+                replaced_in_queue=[],
+                dropped_in_queue=[],
+                handled_in_queue=[],
+                execution_rejected=[],
+                next_send_ts_ns_local=None,
+                control_scheduling_obligations=(),
+            )
+
+    def _boom(*_: object, **__: object) -> None:
+        raise RuntimeError("process boundary failed")
+
+    monkeypatch.setattr(processing_step_module, "process_event_entry", _boom)
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=44),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-process-fail-context",
+            ts_ns_local=44,
+            ts_ns_exch=43,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="process boundary failed"):
+        run_core_step(
+            state,
+            entry,
+            core_decision_context=CoreDecisionContext(
+                risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+                now_ts_ns_local=44,
+                enable_candidate_intent_decision=True,
+                capture_only=True,
+            ),
+        )
+    assert calls == {"risk": 0}
+
+
 def test_run_core_step_with_strategy_and_control_time_context_orders_calls_deterministically() -> None:
     state = StrategyState(event_bus=NullEventBus())
     instrument = "BTC-USDC-PERP"
@@ -890,6 +1175,243 @@ def test_run_core_step_strategy_evaluator_exception_propagates_and_skips_control
 
     assert calls == {"pop": 0, "risk": 0}
     assert combine_called == {"value": 0}
+
+
+def test_run_core_step_candidate_decision_context_not_reached_when_strategy_fails() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    calls = {"risk": 0}
+
+    class _EvaluatorBoom:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 45
+            raise RuntimeError("strategy evaluator failed")
+
+    class _RiskSpy:
+        def decide_intents(self, **_: object) -> GateDecision:
+            calls["risk"] += 1
+            return GateDecision(
+                ts_ns_local=45,
+                accepted_now=[],
+                queued=[],
+                rejected=[],
+                replaced_in_queue=[],
+                dropped_in_queue=[],
+                handled_in_queue=[],
+                execution_rejected=[],
+                next_send_ts_ns_local=None,
+                control_scheduling_obligations=(),
+            )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=45),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-evaluator-fail-context",
+            ts_ns_local=45,
+            ts_ns_exch=44,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="strategy evaluator failed"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_EvaluatorBoom(),
+            core_decision_context=CoreDecisionContext(
+                risk_engine=_RiskSpy(),  # type: ignore[arg-type]
+                now_ts_ns_local=45,
+                enable_candidate_intent_decision=True,
+                capture_only=True,
+            ),
+        )
+    assert calls == {"risk": 0}
+
+
+def test_run_core_step_candidate_decision_context_propagates_risk_failure() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    generated_intent = _new_intent(client_order_id="generated-risk-failure")
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index == 46
+            return [generated_intent]
+
+    class _RiskBoom:
+        def decide_intents(self, **_: object) -> GateDecision:
+            raise RuntimeError("risk engine failed in candidate capture path")
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=46),
+        event=_fill_event(
+            instrument="BTC-USDC-PERP",
+            client_order_id="fill-risk-failure-context",
+            ts_ns_local=46,
+            ts_ns_exch=45,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="risk engine failed in candidate capture path"):
+        run_core_step(
+            state,
+            entry,
+            strategy_evaluator=_Evaluator(),
+            core_decision_context=CoreDecisionContext(
+                risk_engine=_RiskBoom(),  # type: ignore[arg-type]
+                now_ts_ns_local=46,
+                enable_candidate_intent_decision=True,
+                capture_only=True,
+            ),
+        )
+
+
+def test_run_core_step_candidate_decision_context_side_effects_are_opt_in_characterization() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "opt-in-side-effect-order"
+    risk_cfg = RiskConfig(
+        scope="test",
+        trading_enabled=True,
+        notional_limits=NotionalLimits(
+            currency="USDC",
+            max_gross_notional=1e18,
+            max_single_order_notional=1e18,
+        ),
+        order_rate_limits=OrderRateLimits(max_orders_per_second=0),
+    )
+
+    baseline_state = StrategyState(event_bus=NullEventBus())
+    enabled_state = StrategyState(event_bus=NullEventBus())
+    enabled_risk = RiskEngine(risk_cfg=risk_cfg, event_bus=NullEventBus())
+
+    class _Evaluator:
+        def evaluate(self, context: CoreStepStrategyContext) -> list[NewOrderIntent]:
+            assert context.state._last_processing_position_index in (47, 48)
+            return [
+                NewOrderIntent(
+                    ts_ns_local=context.position.index,
+                    instrument=instrument,
+                    client_order_id=client_order_id,
+                    intents_correlation_id="corr-opt-in",
+                    side="buy",
+                    order_type="limit",
+                    intended_qty=Quantity(value=1.0, unit="contracts"),
+                    intended_price=Price(currency="USDC", value=100.0),
+                    time_in_force="GTC",
+                )
+            ]
+
+    baseline_entry = EventStreamEntry(
+        position=ProcessingPosition(index=47),
+        event=_fill_event(
+            instrument=instrument,
+            client_order_id="fill-side-effect-baseline",
+            ts_ns_local=47,
+            ts_ns_exch=46,
+        ),
+    )
+    enabled_entry = EventStreamEntry(
+        position=ProcessingPosition(index=48),
+        event=_fill_event(
+            instrument=instrument,
+            client_order_id="fill-side-effect-enabled",
+            ts_ns_local=48,
+            ts_ns_exch=47,
+        ),
+    )
+
+    baseline_result = run_core_step(
+        baseline_state,
+        baseline_entry,
+        strategy_evaluator=_Evaluator(),
+    )
+    enabled_result = run_core_step(
+        enabled_state,
+        enabled_entry,
+        strategy_evaluator=_Evaluator(),
+        core_decision_context=CoreDecisionContext(
+            risk_engine=enabled_risk,
+            now_ts_ns_local=48,
+            enable_candidate_intent_decision=True,
+            capture_only=True,
+        ),
+    )
+    assert baseline_result.core_step_decision is None
+    assert baseline_result.compat_gate_decision is None
+    assert baseline_result.dispatchable_intents == ()
+    assert not baseline_state.has_queued_intent(instrument, client_order_id)
+
+    assert enabled_result.core_step_decision is not None
+    assert enabled_result.compat_gate_decision is not None
+    assert enabled_result.dispatchable_intents == ()
+    assert enabled_state.has_queued_intent(instrument, client_order_id)
+
+
+def test_run_core_step_control_time_with_both_contexts_preserves_existing_control_time_path() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    instrument = "BTC-USDC-PERP"
+    queued_intent = _new_intent(client_order_id="queued-control-both-contexts")
+    state.merge_intents_into_queue(instrument, [queued_intent])
+
+    calls = {"control_risk": 0, "candidate_risk": 0}
+    accepted_now = _new_intent(client_order_id="accepted-control-both-contexts")
+
+    class _ControlRiskSpy:
+        def decide_intents(
+            self,
+            *,
+            raw_intents: list[NewOrderIntent],
+            state: StrategyState,
+            now_ts_ns_local: int,
+        ) -> GateDecision:
+            calls["control_risk"] += 1
+            assert state is not None
+            assert now_ts_ns_local == 49
+            assert [it.client_order_id for it in raw_intents] == (
+                [queued_intent.client_order_id]
+            )
+            return GateDecision(
+                ts_ns_local=now_ts_ns_local,
+                accepted_now=[accepted_now],
+                queued=[],
+                rejected=[],
+                replaced_in_queue=[],
+                dropped_in_queue=[],
+                handled_in_queue=[],
+                execution_rejected=[],
+                next_send_ts_ns_local=None,
+                control_scheduling_obligations=(),
+            )
+
+    class _CandidateRiskMustNotRun:
+        def decide_intents(self, **_: object) -> GateDecision:
+            calls["candidate_risk"] += 1
+            raise AssertionError(
+                "candidate decision path must not run on control-time compatibility path"
+            )
+
+    entry = EventStreamEntry(
+        position=ProcessingPosition(index=49),
+        event=_control_time_event(due_ts_ns_local=49, realized_ts_ns_local=49),
+    )
+    result = run_core_step(
+        state,
+        entry,
+        control_time_queue_context=ControlTimeQueueReevaluationContext(
+            risk_engine=_ControlRiskSpy(),  # type: ignore[arg-type]
+            instrument=instrument,
+            now_ts_ns_local=49,
+        ),
+        core_decision_context=CoreDecisionContext(
+            risk_engine=_CandidateRiskMustNotRun(),  # type: ignore[arg-type]
+            now_ts_ns_local=49,
+            enable_candidate_intent_decision=True,
+            capture_only=True,
+        ),
+    )
+
+    assert calls == {"control_risk": 1, "candidate_risk": 0}
+    assert tuple(it.client_order_id for it in result.dispatchable_intents) == (
+        "accepted-control-both-contexts",
+    )
+    assert result.compat_gate_decision is not None
+    assert result.core_step_decision is not None
 
 
 def test_run_core_step_does_not_pop_or_gate_when_process_event_entry_fails(

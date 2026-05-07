@@ -60,6 +60,22 @@ class ControlTimeQueueReevaluationContext:
     now_ts_ns_local: int
 
 
+@dataclass(frozen=True, slots=True)
+class CoreDecisionContext:
+    """Optional deterministic context for candidate-intent decision capture.
+
+    Notes:
+    - ``capture_only`` controls only result projection behavior.
+    - The compatibility RiskEngine path may still mutate queue/rate state.
+    """
+
+    risk_engine: RiskEngine
+    now_ts_ns_local: int
+    instrument: str | None = None
+    enable_candidate_intent_decision: bool = False
+    capture_only: bool = True
+
+
 def _select_effective_control_scheduling_obligation(
     decision: GateDecision,
 ) -> ControlSchedulingObligation | None:
@@ -113,14 +129,16 @@ def run_core_step(
     *,
     configuration: CoreConfiguration | None = None,
     control_time_queue_context: ControlTimeQueueReevaluationContext | None = None,
+    core_decision_context: CoreDecisionContext | None = None,
     strategy_evaluator: CoreStepStrategyEvaluator | None = None,
 ) -> CoreStepResult:
     """Run one transitional Core step.
 
     Behavior in this phase:
     - delegates event processing to the canonical boundary via process_event_entry;
-    - propagates reducer/boundary exceptions unchanged;
-    - returns an empty CoreStepResult for future deterministic effects.
+    - computes generated/candidate intents deterministically;
+    - optionally captures compatibility decision projections via core_decision_context;
+    - preserves the existing control-time queue reevaluation compatibility path.
     """
     process_event_entry(state, entry, configuration=configuration)
 
@@ -144,7 +162,60 @@ def run_core_step(
         queued_intents=queued_snapshot,
     )
 
+    # Preserve the existing ControlTimeEvent compatibility path behavior.
+    if isinstance(entry.event, ControlTimeEvent) and control_time_queue_context is not None:
+        popped_intents = state.pop_queued_intents(control_time_queue_context.instrument)
+        if not popped_intents:
+            return CoreStepResult(
+                generated_intents=generated_intents,
+                candidate_intents=candidate_intents,
+            )
+
+        decision = control_time_queue_context.risk_engine.decide_intents(
+            raw_intents=popped_intents,
+            state=state,
+            now_ts_ns_local=control_time_queue_context.now_ts_ns_local,
+        )
+        selected_obligation = _select_effective_control_scheduling_obligation(decision)
+        core_step_decision = _map_compat_gate_decision_to_core_step_decision(
+            decision=decision,
+            control_scheduling_obligation=selected_obligation,
+        )
+        return CoreStepResult(
+            generated_intents=generated_intents,
+            candidate_intents=candidate_intents,
+            dispatchable_intents=tuple(decision.accepted_now),
+            control_scheduling_obligation=selected_obligation,
+            core_step_decision=core_step_decision,
+            compat_gate_decision=decision,
+        )
+
     if not isinstance(entry.event, ControlTimeEvent):
+        if (
+            core_decision_context is not None
+            and core_decision_context.enable_candidate_intent_decision
+            and candidate_intents
+        ):
+            if not core_decision_context.capture_only:
+                raise NotImplementedError(
+                    "core_decision_context capture_only=False is not supported yet"
+                )
+            decision = core_decision_context.risk_engine.decide_intents(
+                raw_intents=list(candidate_intents),
+                state=state,
+                now_ts_ns_local=core_decision_context.now_ts_ns_local,
+            )
+            selected_obligation = _select_effective_control_scheduling_obligation(decision)
+            core_step_decision = _map_compat_gate_decision_to_core_step_decision(
+                decision=decision,
+                control_scheduling_obligation=selected_obligation,
+            )
+            return CoreStepResult(
+                generated_intents=generated_intents,
+                candidate_intents=candidate_intents,
+                core_step_decision=core_step_decision,
+                compat_gate_decision=decision,
+            )
         return CoreStepResult(
             generated_intents=generated_intents,
             candidate_intents=candidate_intents,
@@ -155,29 +226,3 @@ def run_core_step(
             generated_intents=generated_intents,
             candidate_intents=candidate_intents,
         )
-
-    popped_intents = state.pop_queued_intents(control_time_queue_context.instrument)
-    if not popped_intents:
-        return CoreStepResult(
-            generated_intents=generated_intents,
-            candidate_intents=candidate_intents,
-        )
-
-    decision = control_time_queue_context.risk_engine.decide_intents(
-        raw_intents=popped_intents,
-        state=state,
-        now_ts_ns_local=control_time_queue_context.now_ts_ns_local,
-    )
-    selected_obligation = _select_effective_control_scheduling_obligation(decision)
-    core_step_decision = _map_compat_gate_decision_to_core_step_decision(
-        decision=decision,
-        control_scheduling_obligation=selected_obligation,
-    )
-    return CoreStepResult(
-        generated_intents=generated_intents,
-        candidate_intents=candidate_intents,
-        dispatchable_intents=tuple(decision.accepted_now),
-        control_scheduling_obligation=selected_obligation,
-        core_step_decision=core_step_decision,
-        compat_gate_decision=decision,
-    )
