@@ -26,7 +26,7 @@ Initial public release of the core.
 - Deterministic risk gating before execution
 
 #### Backtest Layer
-- Integration with [hftbacktest](https://github.com/nkaz001/hftbacktest)
+- Integration with an external backtest runtime
 - Strategy runner abstraction
 - Venue adapter interface
 - Deterministic event processing pipeline

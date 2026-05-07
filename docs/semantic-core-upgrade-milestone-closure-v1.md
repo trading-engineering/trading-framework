@@ -65,7 +65,7 @@ Implementation-facing contract references in `core/docs`:
 - `StrategyState` contains canonical reducer paths and compatibility reducer/projection paths concurrently.
 - Post-submission lifecycle progression after `Submitted` remains snapshot/compatibility-driven (`ingest_order_snapshots` / `OrderStateEvent` / `apply_order_state_event` / `DerivedFillEvent` projection).
 - `ControlTimeEvent` reducer behavior is currently no-op transition slice (no queue/rate/control reducer migration implied).
-- hftbacktest capability support is partial in the model: market/submitted/control-time boundaries are wired; execution-feedback source capability remains unsatisfied.
+- Backtest-runtime capability support is partial in the model: market/submitted/control-time boundaries are wired; execution-feedback source capability remains unsatisfied.
 
 ### Deferred in current implementation
 
@@ -82,7 +82,7 @@ Implementation-facing contract references in `core/docs`:
 
 Current usability decision:
 
-- Usable for current hftbacktest backtests: **Yes**.
+- Usable for current backtest runtime integrations: **Yes**.
 - Usable as a transitional semantic milestone: **Yes**.
 - Usable as final full canonical Event Stream implementation: **No**.
 

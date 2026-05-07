@@ -54,7 +54,7 @@ before invoking core canonical processing/fold APIs.
 `RCC-07` — `core` must not read runtime JSON files directly.
 
 `RCC-08` — `core` must not depend on runtime/engine config classes (including
-`HftEngineConfig`, live engine config types, or runtime config classes) at the
+backtest engine config types, live engine config types, or runtime config classes) at the
 configuration boundary.
 
 `RCC-09` — A run config may contain multiple sections (for example `engine`,

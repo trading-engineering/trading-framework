@@ -124,7 +124,7 @@ This is exactly the boundary we are currently moving toward.
 
 ### 5. CoreStepResult must remain venue-neutral
 
-The Core must not output a “Binance order” or an “hftbacktest order.”
+The Core must not output a venue-specific order shape from any external engine.
 
 The Core outputs:
 

@@ -171,7 +171,7 @@ python -m pytest -q core/tests
 
 Core Runtime (`core-runtime`) provides runtime execution around Core, including:
 
-- local hftbacktest-backed execution entrypoints
+- local backtest-runtime execution entrypoints
 - Argo/runtime orchestration entrypoints
 - runtime configuration and environment wiring
 - local output artifacts under `.runtime/local/results/`

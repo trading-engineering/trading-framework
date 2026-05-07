@@ -377,11 +377,11 @@ def test_positioned_market_contract_does_not_import_runtime_configuration_mappin
     forbidden_modules = (
         "core_runtime",
         "trading_runtime",
-        "hft_engine_config",
+        "backtest_engine_config",
         "live_engine_config",
     )
     forbidden_symbols = {
-        "HftEngineConfig",
+        "BacktestEngineConfig",
         "LiveEngineConfig",
         "RiskConfig",
     }

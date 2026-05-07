@@ -23,7 +23,7 @@
     },
     "client_order_id": {
       "type": "string",
-      "description": "Order identifier (maps to hftbacktest 'order_id'). Used for new/cancel/replace. Must be unique while an order with the same ID exists.",
+      "description": "Order identifier (maps to runtime adapter order IDs). Used for new/cancel/replace. Must be unique while an order with the same ID exists.",
       "minLength": 1
     },
     "intent_type": {

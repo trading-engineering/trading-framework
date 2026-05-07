@@ -135,7 +135,7 @@ Existing tests that already anchor current behavior:
   - `core-runtime/tests/runtime/test_strategy_runner_canonical_market_adoption.py::test_canonical_counter_increments_only_after_successful_canonical_processing`
 - Compatibility `rc == 3` snapshot branch remains unchanged:
   - `core-runtime/tests/runtime/test_strategy_runner_canonical_market_adoption.py::test_order_snapshot_branch_keeps_compatibility_path`
-  - `core-runtime/tests/runtime/test_hftbacktest_execution_feedback_probe.py::test_runner_contains_rc3_snapshot_branch`
+  - `core-runtime` runtime execution-feedback probe test for `rc == 3` snapshot branching
 - Configuration passed to `process_event_entry(...)`:
   - `core-runtime/tests/runtime/test_strategy_runner_canonical_market_adoption.py::test_process_market_event_routes_through_event_entry_with_core_configuration`
 

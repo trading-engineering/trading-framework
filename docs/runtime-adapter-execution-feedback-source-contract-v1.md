@@ -605,7 +605,7 @@ decision and test-backed reconciliation rules.
 
 `RAEFSC-127` - Code interface addition.
 
-`RAEFSC-128` - hftbacktest or other adapter implementation work.
+`RAEFSC-128` - specific backtest runtime or other adapter implementation work.
 
 `RAEFSC-129` - Runtime canonical `FillEvent` ingress implementation.
 
@@ -620,9 +620,9 @@ implementation.
 
 ---
 
-## Appendix C: hftbacktest source feasibility and gap decision (Phase 4H)
+## Appendix C: backtest runtime source feasibility and gap decision (Phase 4H)
 
-This appendix records the hftbacktest-specific feasibility decision from Phase
+This appendix records the backtest-runtime-specific feasibility decision from Phase
 4G and documents the exact source/adapter gap required before any canonical
 `FillEvent` ingress planning.
 
@@ -637,22 +637,22 @@ This appendix is docs-contract only:
 - it does not change reducers or event taxonomy;
 - it does not implement replay/storage/`ProcessingContext`/`EventStreamCursor`.
 
-`RAEFSC-134` - Appendix C scope is hftbacktest-specific feasibility and gap
+`RAEFSC-134` - Appendix C scope is backtest-runtime-specific feasibility and gap
 documentation only; no implementation behavior changes are introduced.
 
 ---
 
 ### C.1 Decision snapshot
 
-`RAEFSC-135` - Current hftbacktest/core-runtime integration feasibility remains
+`RAEFSC-135` - Current backtest-runtime/core-runtime integration feasibility remains
 decision **C** for `ExecutionFeedbackRecordSource` eligibility.
 
-`RAEFSC-136` - No currently exposed hftbacktest/core-runtime source satisfies
+`RAEFSC-136` - No currently exposed backtest-runtime/core-runtime source satisfies
 the `ExecutionFeedbackRecordSource` contract end-to-end under Appendices A and
 B.
 
 `RAEFSC-137` - Canonical runtime `FillEvent` ingress remains deferred for the
-hftbacktest integration in this phase.
+backtest-runtime integration in this phase.
 
 ---
 
@@ -697,7 +697,7 @@ for canonical order execution feedback:
 - it is market-trade data, not deterministic own-order execution-feedback
   records with canonical order correlation guarantees.
 
-`RAEFSC-143` - Latent hftbacktest order-structure fields (including potential
+`RAEFSC-143` - Latent backtest-runtime order-structure fields (including potential
 maker/taker-style flags) are classified as **insufficient unless surfaced
 through explicit authoritative execution-feedback records**:
 
@@ -710,7 +710,7 @@ through explicit authoritative execution-feedback records**:
 
 ### C.3 Exact missing requirements
 
-`RAEFSC-144` - Current hftbacktest/core-runtime integration lacks an explicit
+`RAEFSC-144` - Current backtest-runtime/core-runtime integration lacks an explicit
 adapter-facing execution-feedback record channel matching Appendix A required
 shape and Appendix B drain semantics.
 
@@ -743,7 +743,7 @@ dual-path operation.
 
 ### C.4 Minimum required extension boundary (future, non-implemented)
 
-`RAEFSC-152` - Minimum required extension is a hftbacktest wrapper/adapter
+`RAEFSC-152` - Minimum required extension is a backtest-runtime wrapper/adapter
 capability that provides authoritative `ExecutionFeedbackRecordSource`
 semantics at the venue-side adapter boundary.
 
@@ -789,9 +789,9 @@ phase.
 
 ---
 
-### C.6 Future implementation gate for hftbacktest scope
+### C.6 Future implementation gate for backtest runtime scope
 
-`RAEFSC-165` - Canonical `FillEvent` implementation planning for hftbacktest
+`RAEFSC-165` - Canonical `FillEvent` implementation planning for backtest runtime
 scope may begin only after all C.3 missing requirements are satisfied under
 Appendix A/B contracts.
 

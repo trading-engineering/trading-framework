@@ -215,12 +215,12 @@ is gated and not enabled by this document.
 
 ---
 
-## Current hftbacktest capability map (Phase 6C snapshot)
+## Current backtest runtime capability map (Phase 6C snapshot)
 
 `VACM-37` - This table records current capability support classification for the
-hftbacktest adapter/runtime integration without changing behavior.
+current backtest runtime adapter integration without changing behavior.
 
-| capability | current hftbacktest support | classification | current event/artifact path | notes / limitations |
+| capability | current backtest runtime support | classification | current event/artifact path | notes / limitations |
 | --- | --- | --- | --- | --- |
 | market input capability | supported | canonical event capable | canonical `MarketEvent` positioned ingestion path | canonical market path active; ordering remains `ProcessingPosition` authority |
 | order submission result boundary capability | supported (entry boundary) | canonical event capable | successful `new` dispatch -> canonical `OrderSubmittedEvent` | failed `new` dispatch emits no `OrderSubmittedEvent`; replace/cancel do not create new entry event |
@@ -229,7 +229,7 @@ hftbacktest adapter/runtime integration without changing behavior.
 | control-time realization capability | supported (current transition slice) | canonical event capable | realized deadline obligation -> canonical `ControlTimeEvent` injection | sparse/deadline-style realization only; no periodic tick model |
 | execution feedback capability | not supported as authoritative source | optional future capability (currently missing/ineligible) | no eligible `ExecutionFeedbackRecordSource` path in current integration | blocked by missing authoritative source channel, deterministic non-timestamp `source_sequence`, source-authoritative liquidity, and explicit canonical correlation gates |
 
-`VACM-38` - Current hftbacktest execution-feedback feasibility remains blocked by
+`VACM-38` - Current backtest runtime execution-feedback feasibility remains blocked by
 the missing authoritative `ExecutionFeedbackRecordSource` capability.
 
 `VACM-39` - Snapshot compatibility path remains active semantic authority for
@@ -307,7 +307,7 @@ or compatibility boundaries in existing contracts.
 
 `VACM-56` - No adapter API methods/signatures are defined or implemented.
 
-`VACM-57` - No hftbacktest-specific `core` semantics are introduced.
+`VACM-57` - No runtime-specific `core` semantics are introduced.
 
 `VACM-58` - No runtime canonical `FillEvent` ingress implementation.
 

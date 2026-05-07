@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 # Internal state models
 #
 # These models are intentionally NOT part of the JSON-schema "source of truth".
-# They exist to hold runtime state derived from hftbacktest snapshots/events.
+# They exist to hold runtime state derived from adapter snapshots/events.
 # ---------------------------------------------------------------------------
 
 TERMINAL_ORDER_STATES: set[str] = {"filled", "canceled", "expired", "rejected"}
@@ -84,7 +84,7 @@ class OrderSnapshot:
     cum_filled_qty: float
     remaining_qty: float
 
-    # Best-effort request marker from hftbacktest snapshots.
+    # Best-effort request marker from runtime snapshots.
     # Convention: 0 indicates no in-flight request.
     req: int = 0
 
@@ -141,7 +141,7 @@ class MarketState:
 
 @dataclass(slots=True)
 class AccountState:
-    """Best-effort account values from hftbacktest state_values()."""
+    """Best-effort account values from runtime account snapshots."""
 
     position: float = 0.0
     balance: float = 0.0
@@ -224,7 +224,7 @@ class StrategyState:
     def mark_intent_sent(self, instrument: str, client_order_id: str, intent_type: str) -> None:
         """Record that an intent was sent to the execution layer.
 
-        This is used for best-effort inflight handling. hftbacktest provides snapshots
+        This is used for best-effort inflight handling. Backtest runtimes often provide snapshots
         (status/req) rather than explicit ACK events, so inflight is cleared heuristically
         as soon as subsequent snapshots indicate completion.
 
@@ -816,7 +816,7 @@ class StrategyState:
 
     # NOTE:
     # Currently unused.
-    # hftbacktest does not emit explicit FillEvent deltas; fills are inferred
+    # Some backtest runtimes do not emit explicit FillEvent deltas; fills are inferred
     # indirectly from order state snapshots instead.
     # This method is reserved for event-driven backends or live trading venues
     # that provide fill-level events.
@@ -860,9 +860,9 @@ class StrategyState:
         self._event_bus.emit(event)
 
     def ingest_order_snapshots(self, instrument: str, orders_snapshot_iter: Iterable[object]) -> None:
-        """Ingest hftbacktest order snapshots and reduce them into internal state.
+        """Ingest runtime order snapshots and reduce them into internal state.
 
-        hftbacktest provides *snapshots* (not deltas). We translate each snapshot into
+        Snapshot-driven runtimes provide *snapshots* (not deltas). We translate each snapshot into
         an OrderStateEvent (snapshot) and feed it into apply_order_state_event().
 
         This is an adapter/materialization path for compatibility snapshot
@@ -870,7 +870,7 @@ class StrategyState:
         """
 
         def map_status(status: int, req: int, client_order_id: str) -> str:
-            """Best-effort mapping from hftbacktest (status, req) to schema state.
+            """Best-effort mapping from runtime snapshot (status, req) to schema state.
 
             Design: terminal status wins. If a request marker is present (req!=0),
             treat this as "in-flight". In that case, "pending_new" is used only
@@ -900,7 +900,7 @@ class StrategyState:
 
             return "rejected"
 
-        # hftbacktest "values()" often returns a custom iterator with has_next/get
+        # Some runtimes expose custom iterators with has_next/get semantics.
         if hasattr(orders_snapshot_iter, "has_next") and hasattr(orders_snapshot_iter, "get"):
             it = orders_snapshot_iter
 
@@ -911,25 +911,25 @@ class StrategyState:
                 o = _next()
                 if o is None:
                     break
-                self._ingest_one_hft_order(instrument, o, map_status)
+                self._ingest_one_snapshot_order(instrument, o, map_status)
             return
 
         # Otherwise assume a normal Python iterable
         for o in orders_snapshot_iter:
-            self._ingest_one_hft_order(instrument, o, map_status)
+            self._ingest_one_snapshot_order(instrument, o, map_status)
 
-    def _ingest_one_hft_order(
+    def _ingest_one_snapshot_order(
         self,
         instrument: str,
         o: object,
         map_status: Callable[[int, int, int], str],
     ) -> None:
-        """Translate a single hftbacktest order snapshot object into an OrderStateEvent."""
+        """Translate a single runtime order snapshot object into an OrderStateEvent."""
 
         # --- Map primitive enums to your schema enums ---
         order_type: str = "limit" if o.order_type == 0 else "market"
 
-        # hftbacktest typically uses BUY=1, SELL=-1
+        # Snapshot adapters commonly use BUY=1, SELL=-1.
         side: str = "buy" if o.side == 1 else "sell"
 
         tif: int = o.time_in_force
