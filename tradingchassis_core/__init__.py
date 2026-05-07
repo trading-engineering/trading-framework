@@ -13,6 +13,14 @@ from tradingchassis_core.core.domain.candidate_intent import (
     CandidateIntentRecord,
 )
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
+from tradingchassis_core.core.domain.execution_control_apply import (
+    ExecutionControlApplyContext,
+    ExecutionControlApplyResult,
+    ExecutionControlBlockedRecord,
+    ExecutionControlDispatchableRecord,
+    ExecutionControlHandledRecord,
+    apply_execution_control_plan,
+)
 from tradingchassis_core.core.domain.execution_control_decision import (
     ExecutionControlDecision,
 )
@@ -114,6 +122,12 @@ __all__ = [
     "CorePolicyAdmissionContext",
     "ControlTimeQueueReevaluationContext",
     "ExecutionControlDecision",
+    "ExecutionControlApplyContext",
+    "ExecutionControlApplyResult",
+    "ExecutionControlBlockedRecord",
+    "ExecutionControlDispatchableRecord",
+    "ExecutionControlHandledRecord",
+    "apply_execution_control_plan",
     "PolicyRiskDecision",
     "PolicyRejectedCandidate",
     "PolicyAdmissionResult",
