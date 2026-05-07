@@ -19,6 +19,7 @@ from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.types import (
     NewOrderIntent,
     OrderIntent,
+    OrderStateEvent,
     Price,
     Quantity,
     ReplaceOrderIntent,
@@ -306,3 +307,145 @@ def test_apply_execution_control_plan_side_effect_boundaries_do_not_use_risk_eng
 
     assert len(result.dispatchable_records) == 1
     assert all(not isinstance(event, RiskDecisionEvent) for event in sink.events)
+
+
+def test_apply_execution_control_plan_stale_queued_origin_is_handled_without_crash() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    execution_control = ExecutionControl()
+    queued_intent = _new_intent(client_order_id="stale-queued")
+    record = _record(
+        queued_intent,
+        origin=CandidateIntentOrigin.QUEUED,
+        merge_index=0,
+    )
+
+    result = apply_execution_control_plan(
+        _plan(record),
+        ExecutionControlApplyContext(
+            state=state,
+            execution_control=execution_control,
+            now_ts_ns_local=1,
+        ),
+    )
+
+    assert result.dispatchable_records == ()
+    assert result.blocked_records == ()
+    assert tuple(item.reason for item in result.execution_handled_records) == (
+        "queued_record_missing",
+    )
+    assert not state.has_queued_intent(queued_intent.instrument, queued_intent.client_order_id)
+
+
+def test_apply_execution_control_plan_duplicate_generated_candidates_do_not_double_dispatch() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    execution_control = ExecutionControl()
+    intent = _new_intent(client_order_id="dup-generated")
+    record_a = _record(intent, origin=CandidateIntentOrigin.GENERATED, merge_index=0)
+    record_b = _record(intent, origin=CandidateIntentOrigin.GENERATED, merge_index=1)
+
+    result = apply_execution_control_plan(
+        _plan(record_a, record_b),
+        ExecutionControlApplyContext(
+            state=state,
+            execution_control=execution_control,
+            now_ts_ns_local=1,
+        ),
+    )
+
+    assert tuple(it.client_order_id for it in result.execution_control_decision.dispatchable_intents) == (
+        "dup-generated",
+    )
+    assert len(result.dispatchable_records) == 1
+    assert tuple(item.reason for item in result.execution_handled_records) == (
+        "duplicate_candidate_record",
+    )
+
+
+def test_apply_execution_control_plan_inflight_blocks_before_rate_and_does_not_consume_tokens() -> None:
+    instrument = "BTC-USDC-PERP"
+    client_order_id = "inflight-order"
+    state = StrategyState(event_bus=NullEventBus())
+    execution_control = ExecutionControl()
+
+    state.apply_order_state_event(
+        OrderStateEvent(
+            ts_ns_exch=1,
+            ts_ns_local=1,
+            instrument=instrument,
+            client_order_id=client_order_id,
+            order_type="limit",
+            state_type="working",
+            side="buy",
+            intended_price=Price(currency="USDC", value=100.0),
+            filled_price=None,
+            intended_qty=Quantity(unit="contracts", value=1.0),
+            cum_filled_qty=None,
+            remaining_qty=None,
+            time_in_force="GTC",
+            reason=None,
+            raw={"req": 1, "source": "snapshot"},
+        )
+    )
+    state.mark_intent_sent(instrument=instrument, client_order_id=client_order_id, intent_type="replace")
+
+    replace_intent = _replace_intent(client_order_id=client_order_id, px=101.0, qty=1.0)
+    record = _record(replace_intent, origin=CandidateIntentOrigin.GENERATED, merge_index=0)
+    rate_before = copy.deepcopy(execution_control._rate_state)
+
+    result = apply_execution_control_plan(
+        _plan(record),
+        ExecutionControlApplyContext(
+            state=state,
+            execution_control=execution_control,
+            now_ts_ns_local=2,
+            max_orders_per_sec=10,
+            max_cancels_per_sec=10,
+        ),
+    )
+
+    assert result.dispatchable_records == ()
+    assert len(result.blocked_records) == 1
+    assert result.blocked_records[0].reason == "inflight"
+    assert execution_control._rate_state == rate_before
+
+
+def test_apply_execution_control_plan_obligation_collapse_is_deterministic() -> None:
+    state = StrategyState(event_bus=NullEventBus())
+    execution_control = ExecutionControl()
+
+    a = _new_intent(client_order_id="o-a")
+    b = _new_intent(client_order_id="o-b")
+    b = b.model_copy(update={"instrument": "ETH-USDC-PERP"})
+
+    record_a = _record(a, origin=CandidateIntentOrigin.GENERATED, merge_index=0)
+    record_b = _record(b, origin=CandidateIntentOrigin.GENERATED, merge_index=1)
+
+    _ = apply_execution_control_plan(
+        _plan(_record(_new_intent(client_order_id="warm"), origin=CandidateIntentOrigin.GENERATED, merge_index=99)),
+        ExecutionControlApplyContext(
+            state=state,
+            execution_control=execution_control,
+            now_ts_ns_local=1,
+            max_orders_per_sec=1,
+        ),
+    )
+
+    result = apply_execution_control_plan(
+        _plan(record_a, record_b),
+        ExecutionControlApplyContext(
+            state=state,
+            execution_control=execution_control,
+            now_ts_ns_local=1,
+            max_orders_per_sec=1,
+        ),
+    )
+
+    assert len(result.blocked_records) == 2
+    collapsed = result.control_scheduling_obligation
+    assert collapsed is not None
+    expected = min(
+        (br.scheduling_obligation for br in result.blocked_records if br.scheduling_obligation is not None),
+        key=lambda o: (o.due_ts_ns_local, o.obligation_key),
+    )
+    assert collapsed == expected
+    assert result.execution_control_decision.control_scheduling_obligation == collapsed

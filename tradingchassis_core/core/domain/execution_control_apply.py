@@ -6,6 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from tradingchassis_core.core.domain.candidate_intent import (
+    CandidateIntentOrigin,
     CandidateIntentRecord,
 )
 from tradingchassis_core.core.domain.execution_control_decision import (
@@ -148,6 +149,8 @@ def apply_execution_control_plan(
     blocked_records: list[ExecutionControlBlockedRecord] = []
     obligations: list[ControlSchedulingObligation] = []
 
+    processed_keys: set[str] = set()
+
     to_queue_by_instr: defaultdict[str, list] = defaultdict(list)
     replaced_in_queue: list[tuple] = []
     dropped_in_queue: list = []
@@ -155,10 +158,20 @@ def apply_execution_control_plan(
     handled_in_queue: list = []
 
     for record in plan.active_records:
+        if record.logical_key in processed_keys:
+            execution_handled_records.append(
+                ExecutionControlHandledRecord(
+                    record=record,
+                    reason="duplicate_candidate_record",
+                )
+            )
+            continue
+        processed_keys.add(record.logical_key)
+
         intent = record.intent
         instrument = intent.instrument
 
-        if record.origin.value == "generated":
+        if record.origin == CandidateIntentOrigin.GENERATED:
             to_queue_before = len(to_queue_by_instr[instrument])
             handled_before = len(handled_in_queue)
             continue_to_sendability, reject_reason = (
