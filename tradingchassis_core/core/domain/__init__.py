@@ -23,7 +23,11 @@ from tradingchassis_core.core.domain.processing_step import (
     CoreDecisionContext,
     CoreExecutionControlApplyContext,
     CorePolicyAdmissionContext,
+    CoreWakeupReductionResult,
     run_core_step,
+    run_core_wakeup_decision,
+    run_core_wakeup_reduction,
+    run_core_wakeup_step,
 )
 from tradingchassis_core.core.domain.step_decision import CoreStepDecision
 from tradingchassis_core.core.domain.step_result import CoreStepResult
@@ -46,6 +50,10 @@ __all__ = [
     "CoreDecisionContext",
     "CoreExecutionControlApplyContext",
     "CorePolicyAdmissionContext",
+    "CoreWakeupReductionResult",
     "ControlTimeQueueReevaluationContext",
+    "run_core_wakeup_reduction",
+    "run_core_wakeup_decision",
+    "run_core_wakeup_step",
     "run_core_step",
 ]

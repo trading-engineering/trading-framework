@@ -8,7 +8,7 @@ and returns an empty CoreStepResult contract value.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, Sequence
+from typing import TYPE_CHECKING, Callable, Protocol, Sequence
 
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
 from tradingchassis_core.core.domain.execution_control_apply import (
@@ -106,6 +106,20 @@ class CoreExecutionControlApplyContext:
     max_orders_per_sec: float | None = None
     max_cancels_per_sec: float | None = None
     activate_dispatchable_outputs: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CoreWakeupReductionResult:
+    """Non-canonical reduction-phase output for one runtime wakeup."""
+
+    entries: tuple[EventStreamEntry, ...] = ()
+    generated_intents: tuple[OrderIntent, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.entries, tuple):
+            object.__setattr__(self, "entries", tuple(self.entries))
+        if not isinstance(self.generated_intents, tuple):
+            object.__setattr__(self, "generated_intents", tuple(self.generated_intents))
 
 
 def _select_effective_control_scheduling_obligation(
@@ -364,3 +378,167 @@ def run_core_step(
             candidate_intent_records=candidate_intent_records,
             candidate_intents=candidate_intents,
         )
+
+
+def run_core_wakeup_reduction(
+    state: StrategyState,
+    entries: Sequence[EventStreamEntry],
+    *,
+    configuration: CoreConfiguration | None = None,
+    strategy_evaluator: CoreStepStrategyEvaluator | None = None,
+    strategy_event_filter: Callable[[object], bool] | None = None,
+) -> CoreWakeupReductionResult:
+    """Reduce multiple canonical entries and collect wakeup-level generated intents.
+
+    This reducer phase intentionally performs no policy, no execution-control plan,
+    and no execution-control apply.
+    """
+
+    entries_tuple = tuple(entries)
+    generated_intents: list[OrderIntent] = []
+    for entry in entries_tuple:
+        process_event_entry(state, entry, configuration=configuration)
+        if strategy_evaluator is None:
+            continue
+        if strategy_event_filter is None or not strategy_event_filter(entry.event):
+            continue
+        strategy_context = CoreStepStrategyContext(
+            state=state,
+            event=entry.event,
+            position=entry.position,
+            configuration=configuration,
+        )
+        generated_intents.extend(strategy_evaluator.evaluate(strategy_context))
+    return CoreWakeupReductionResult(
+        entries=entries_tuple,
+        generated_intents=tuple(generated_intents),
+    )
+
+
+def run_core_wakeup_decision(
+    state: StrategyState,
+    reduction: CoreWakeupReductionResult,
+    *,
+    snapshot_instrument: str | None = None,
+    policy_admission_context: CorePolicyAdmissionContext | None = None,
+    execution_control_apply_context: CoreExecutionControlApplyContext | None = None,
+) -> CoreStepResult:
+    """Run one wakeup-level candidate/policy/execution-control decision phase."""
+
+    if execution_control_apply_context is not None and policy_admission_context is None:
+        raise ValueError(
+            "execution_control_apply_context requires policy_admission_context"
+        )
+
+    queued_snapshot = state.queued_intents_snapshot(snapshot_instrument)
+    candidate_intent_records = combine_candidate_intent_records(
+        generated_intents=reduction.generated_intents,
+        queued_intents=queued_snapshot,
+    )
+    candidate_intents = tuple(record.intent for record in candidate_intent_records)
+
+    if policy_admission_context is None:
+        return CoreStepResult(
+            generated_intents=reduction.generated_intents,
+            candidate_intent_records=candidate_intent_records,
+            candidate_intents=candidate_intents,
+        )
+
+    policy_result = apply_policy_to_candidate_records(
+        candidate_intent_records,
+        state=state,
+        now_ts_ns_local=policy_admission_context.now_ts_ns_local,
+        policy_evaluator=policy_admission_context.policy_evaluator,
+    )
+    execution_control_plan = plan_execution_control_candidates(
+        ExecutionControlCandidateInput(
+            accepted_generated=policy_result.accepted_generated,
+            passthrough_queued=policy_result.passthrough_queued,
+        )
+    )
+    apply_result = None
+    if execution_control_apply_context is not None:
+        apply_result = apply_execution_control_plan(
+            execution_control_plan,
+            ExecutionControlApplyContext(
+                state=state,
+                execution_control=execution_control_apply_context.execution_control,
+                now_ts_ns_local=execution_control_apply_context.now_ts_ns_local,
+                max_orders_per_sec=execution_control_apply_context.max_orders_per_sec,
+                max_cancels_per_sec=execution_control_apply_context.max_cancels_per_sec,
+            ),
+        )
+    core_step_decision = CoreStepDecision(
+        policy_rejected_intents=tuple(
+            rejected.record.intent for rejected in policy_result.rejected_generated
+        ),
+        policy_risk_decision=policy_result.policy_risk_decision,
+        execution_control_decision=(
+            execution_control_plan.execution_control_decision
+            if apply_result is None
+            else apply_result.execution_control_decision
+        ),
+        queued_effective_intents=(
+            ()
+            if apply_result is None
+            else apply_result.execution_control_decision.queued_effective_intents
+        ),
+        dispatchable_intents=(
+            ()
+            if apply_result is None
+            else apply_result.execution_control_decision.dispatchable_intents
+        ),
+        execution_handled_intents=(
+            ()
+            if apply_result is None
+            else apply_result.execution_control_decision.execution_handled_intents
+        ),
+        control_scheduling_obligation=(
+            None if apply_result is None else apply_result.control_scheduling_obligation
+        ),
+    )
+    dispatchable_intents: tuple[OrderIntent, ...] = ()
+    control_scheduling_obligation = None
+    if apply_result is not None:
+        control_scheduling_obligation = apply_result.control_scheduling_obligation
+        if execution_control_apply_context.activate_dispatchable_outputs:
+            dispatchable_intents = tuple(
+                record.record.intent for record in apply_result.dispatchable_records
+            )
+    return CoreStepResult(
+        generated_intents=reduction.generated_intents,
+        candidate_intent_records=candidate_intent_records,
+        candidate_intents=candidate_intents,
+        dispatchable_intents=dispatchable_intents,
+        control_scheduling_obligation=control_scheduling_obligation,
+        core_step_decision=core_step_decision,
+    )
+
+
+def run_core_wakeup_step(
+    state: StrategyState,
+    entries: Sequence[EventStreamEntry],
+    *,
+    configuration: CoreConfiguration | None = None,
+    strategy_evaluator: CoreStepStrategyEvaluator | None = None,
+    strategy_event_filter: Callable[[object], bool] | None = None,
+    snapshot_instrument: str | None = None,
+    policy_admission_context: CorePolicyAdmissionContext | None = None,
+    execution_control_apply_context: CoreExecutionControlApplyContext | None = None,
+) -> CoreStepResult:
+    """Convenience wrapper for reduction + wakeup-level decision/apply."""
+
+    reduction = run_core_wakeup_reduction(
+        state,
+        entries,
+        configuration=configuration,
+        strategy_evaluator=strategy_evaluator,
+        strategy_event_filter=strategy_event_filter,
+    )
+    return run_core_wakeup_decision(
+        state,
+        reduction,
+        snapshot_instrument=snapshot_instrument,
+        policy_admission_context=policy_admission_context,
+        execution_control_apply_context=execution_control_apply_context,
+    )

@@ -42,7 +42,11 @@ from tradingchassis_core.core.domain.processing_step import (
     CoreDecisionContext,
     CoreExecutionControlApplyContext,
     CorePolicyAdmissionContext,
+    CoreWakeupReductionResult,
     run_core_step,
+    run_core_wakeup_decision,
+    run_core_wakeup_reduction,
+    run_core_wakeup_step,
 )
 
 # ----------------------------------------------------------------------
@@ -119,9 +123,13 @@ __all__ = [
     "EventStreamEntry",
     "process_event_entry",
     "run_core_step",
+    "run_core_wakeup_reduction",
+    "run_core_wakeup_decision",
+    "run_core_wakeup_step",
     "CoreDecisionContext",
     "CoreExecutionControlApplyContext",
     "CorePolicyAdmissionContext",
+    "CoreWakeupReductionResult",
     "ControlTimeQueueReevaluationContext",
     "ExecutionControlDecision",
     "ExecutionControlApplyContext",
