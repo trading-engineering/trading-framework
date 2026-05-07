@@ -177,6 +177,16 @@ class RiskEngine:
         """Best-effort float equality for normalized values."""
         return abs(a - b) <= 1e-12
 
+    @property
+    def execution_control(self) -> ExecutionControl:
+        """Expose the owned stateful execution-control instance.
+
+        This accessor intentionally returns the existing instance to preserve
+        queue/inflight/rate continuity across compatibility and Core step paths.
+        It must not allocate a new ExecutionControl.
+        """
+        return self._execution_control
+
     # ---------------------------------------------------------------------
     # Soft constraints for strategy
     # ---------------------------------------------------------------------
