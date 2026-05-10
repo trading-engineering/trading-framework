@@ -37,9 +37,15 @@ choices and are not part of this baseline.
 12. [Public API Reference](reference/public-api.md)
 13. [Events Reference](reference/events-reference.md)
 
+### How-to
+
+14. [Add a Canonical Event](how-to/add-canonical-event.md)
+15. [Add a CoreStep or CoreWakeupStep Test](how-to/add-core-step-test.md)
+16. [Extend ExecutionControl](how-to/extend-execution-control.md)
+
 ### Roadmap
 
-14. [Post-MVP Roadmap](roadmap/post-mvp-roadmap.md)
+17. [Post-MVP Roadmap](roadmap/post-mvp-roadmap.md)
 
 ## Current Status Notes
 
