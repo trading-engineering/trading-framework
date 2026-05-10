@@ -2,6 +2,24 @@
 
 This is the target architecture model that current MVP paths are moving toward.
 
+The diagram below shows the migrated-path ownership boundary at a glance. Runtime owns external
+I/O and dispatch execution, while Core owns deterministic semantic reduction and decision shaping.
+
+```mermaid
+flowchart LR
+  A[Runtime raw venue/backtest/live input] --> B[Runtime normalize to canonical events]
+  B --> C[Runtime create ProcessingPosition + EventStreamEntry]
+  C --> D[Call run_core_step/run_core_wakeup_step]
+  D --> E[Core consume canonical events]
+  E --> F[Core reduce state + evaluate strategy]
+  F --> G[Core policy risk + execution control]
+  G --> H[CoreStepResult]
+  H --> I[Runtime dispatch dispatchable_intents]
+  I --> J[External venue I/O]
+  I --> K[Successful NEW]
+  K --> L[Runtime emits OrderSubmittedEvent]
+```
+
 ## Runtime owns
 
 - Receiving raw venue/backtest/live inputs.

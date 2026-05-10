@@ -17,6 +17,18 @@ future runtime wakeup boundary. It is not an event-stream input by itself.
 `ControlTimeEvent` is the canonical control re-entry event that Runtime injects
 when a due obligation is realized.
 
+This diagram shows the handoff boundary: Core emits a non-canonical scheduling obligation, and
+Runtime later injects the canonical `ControlTimeEvent` when due.
+
+```mermaid
+flowchart LR
+  A[CoreStepResult.control_scheduling_obligation] --> B[Runtime store pending obligation]
+  B --> C[Due time reached]
+  C --> D[Runtime inject ControlTimeEvent]
+  D --> E[Runtime create EventStreamEntry]
+  E --> F[run_core_step or run_core_wakeup_step]
+```
+
 ## Current MVP behavior
 
 - Control-time CoreStep path is behind `enable_core_step_control_time_dispatch`.

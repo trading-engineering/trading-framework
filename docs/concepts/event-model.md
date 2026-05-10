@@ -23,3 +23,20 @@
 - Runtime owns canonical event construction and injection timing.
 - Canonical ingestion order is defined by runtime-assigned `ProcessingPosition`.
 - Runtime dispatches `CoreStepResult.dispatchable_intents` for migrated paths.
+
+The diagram below clarifies the event/intent/order boundary: Core works on canonical events and
+intents, while Runtime handles external order dispatch and feedback normalization.
+
+```mermaid
+flowchart LR
+  A[Canonical events] --> B[Core reduction + strategy]
+  B --> C[OrderIntent candidates]
+  C --> D[CoreStepResult.dispatchable_intents]
+  D --> E[Runtime external dispatch/orders]
+  E --> F[Successful NEW]
+  F --> G[Runtime emits OrderSubmittedEvent]
+  E --> H[Venue feedback]
+  H --> I[Runtime normalize feedback]
+  I --> J[OrderExecutionFeedbackEvent]
+  J --> A
+```

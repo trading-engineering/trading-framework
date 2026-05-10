@@ -4,6 +4,24 @@
 
 This page describes the MVP rc3 feedback path, not a full lifecycle redesign.
 
+The diagram below highlights the migrated rc3 flag-on flow and keeps legacy flag-off behavior as a
+secondary compatibility branch.
+
+```mermaid
+flowchart TB
+  A[rc == 3 feedback input] --> B[Runtime reads raw snapshot/feedback]
+  B --> C[Runtime normalize to OrderExecutionFeedbackEvent]
+  C --> D[Runtime create EventStreamEntry]
+  D --> E[run_core_step]
+  E --> F[Core reduce/evaluate/apply]
+  F --> G[CoreStepResult.dispatchable_intents]
+  G --> H[Runtime dispatch externally]
+  H --> I[Successful NEW]
+  I --> J[Runtime emits OrderSubmittedEvent]
+
+  A -. flag off .-> K[Legacy rc3 compatibility path]
+```
+
 ## Current MVP flow (flag on)
 
 - Runtime reads raw rc3 feedback/snapshot input as adapter input.

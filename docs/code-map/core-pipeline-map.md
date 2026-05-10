@@ -5,6 +5,23 @@ This page maps CoreStep/CoreWakeupStep processing from concept to code.
 Runtime provides canonical inputs and later dispatches results. Core performs deterministic
 reduction and decision shaping, then returns `CoreStepResult`.
 
+This diagram summarizes the single-step pipeline and its outputs. External dispatch remains
+runtime-owned and happens after Core returns.
+
+```mermaid
+flowchart LR
+  A[EventStreamEntry] --> B[State reduction]
+  B --> C[Strategy evaluation]
+  C --> D[Generated + queued candidates]
+  D --> E[Dominance/reconciliation]
+  E --> F[Policy risk admission]
+  F --> G[Execution control plan/apply]
+  G --> H[CoreStepResult]
+  H --> I[dispatchable_intents]
+  H --> J[control_scheduling_obligation]
+  I --> K[Runtime external dispatch]
+```
+
 ## `run_core_step` pipeline
 
 1. Canonical `EventStreamEntry` input  
