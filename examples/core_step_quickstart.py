@@ -1,0 +1,141 @@
+"""Core-only CoreStep quickstart example.
+
+Run from the core repository root:
+    python examples/core_step_quickstart.py
+
+This script demonstrates CoreStep mechanics only:
+canonical event in -> run_core_step -> CoreStepResult out.
+
+ControlTimeEvent is used here because it is the smallest canonical event to
+construct for a compact example. This is not a statement that migrated runtime
+paths should productively evaluate strategy on ControlTimeEvent; runtime-owned
+behavior remains documented in the corresponding architecture docs.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import tradingchassis_core as tc
+
+# Internal import gap: ControlTimeEvent is canonical but not currently exported
+# from the package root.
+from tradingchassis_core.core.domain.types import ControlTimeEvent
+# Internal import gap: StrategyState requires an EventBus; NullEventBus is the
+# smallest no-op bus.
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
+# Internal import gap: execution-control apply requires an ExecutionControl
+# instance and this type is not currently exported from package root.
+from tradingchassis_core.core.execution_control.execution_control import ExecutionControl
+
+INSTRUMENT = "BTC-USDC-PERP"
+INTENT_ID_V1 = "quickstart-new-v1"
+INTENT_ID_V2 = "quickstart-new-v2"
+
+
+class OneIntentEvaluator:
+    """Small evaluator that emits one deterministic new-order intent."""
+
+    def __init__(self, client_order_id: str) -> None:
+        self._client_order_id = client_order_id
+
+    def evaluate(self, context: object) -> list[tc.NewOrderIntent]:
+        _ = context
+        return [
+            tc.NewOrderIntent(
+                ts_ns_local=1_000,
+                instrument=INSTRUMENT,
+                client_order_id=self._client_order_id,
+                intents_correlation_id=f"corr-{self._client_order_id}",
+                side="buy",
+                order_type="limit",
+                intended_qty=tc.Quantity(value=1.0, unit="contracts"),
+                intended_price=tc.Price(currency="USDC", value=100.0),
+                time_in_force="GTC",
+            )
+        ]
+
+
+class AllowAllPolicy:
+    """Policy evaluator that admits every generated candidate intent."""
+
+    def evaluate_policy_intent(self, *, intent: tc.OrderIntent, state: tc.StrategyState, now_ts_ns_local: int) -> tuple[bool, str | None]:
+        _ = (intent, state, now_ts_ns_local)
+        return True, None
+
+
+def _control_time_entry(*, index: int, ts_ns_local: int) -> tc.EventStreamEntry:
+    return tc.EventStreamEntry(
+        position=tc.ProcessingPosition(index=index),
+        event=ControlTimeEvent(
+            ts_ns_local_control=ts_ns_local,
+            reason="scheduled_control_recheck",
+            due_ts_ns_local=ts_ns_local,
+            realized_ts_ns_local=ts_ns_local,
+            obligation_reason="rate_limit",
+            obligation_due_ts_ns_local=ts_ns_local,
+            runtime_correlation=None,
+        ),
+    )
+
+
+def run_v1_generated_only(state: tc.StrategyState) -> tc.CoreStepResult:
+    """Smallest CoreStep usage: generated and candidate intents only."""
+
+    result = tc.run_core_step(
+        state,
+        _control_time_entry(index=0, ts_ns_local=1_000),
+        strategy_evaluator=OneIntentEvaluator(INTENT_ID_V1),
+    )
+    assert len(result.generated_intents) == 1
+    assert result.generated_intents[0].client_order_id == INTENT_ID_V1
+    assert len(result.candidate_intent_records) == 1
+    assert result.candidate_intent_records[0].origin is tc.CandidateIntentOrigin.GENERATED
+    assert result.dispatchable_intents == ()
+    return result
+
+
+def run_v2_with_policy_and_apply(state: tc.StrategyState) -> tc.CoreStepResult:
+    """Optional Core-only extension: policy admission + execution-control apply."""
+
+    result = tc.run_core_step(
+        state,
+        _control_time_entry(index=1, ts_ns_local=1_001),
+        strategy_evaluator=OneIntentEvaluator(INTENT_ID_V2),
+        policy_admission_context=tc.CorePolicyAdmissionContext(
+            policy_evaluator=AllowAllPolicy(),
+            now_ts_ns_local=1_001,
+        ),
+        execution_control_apply_context=tc.CoreExecutionControlApplyContext(
+            execution_control=ExecutionControl(),
+            now_ts_ns_local=1_001,
+            activate_dispatchable_outputs=True,
+        ),
+    )
+    assert len(result.dispatchable_intents) == 1
+    assert result.dispatchable_intents[0].client_order_id == INTENT_ID_V2
+    return result
+
+
+def main() -> None:
+    state = tc.StrategyState(event_bus=NullEventBus())
+    result_v1 = run_v1_generated_only(state)
+    result_v2 = run_v2_with_policy_and_apply(state)
+
+    print("CoreStep quickstart")
+    print("v1 generated:", [intent.client_order_id for intent in result_v1.generated_intents])
+    print(
+        "v1 candidate origins:",
+        [record.origin.value for record in result_v1.candidate_intent_records],
+    )
+    print("v1 dispatchable:", [intent.client_order_id for intent in result_v1.dispatchable_intents])
+    print("v2 dispatchable:", [intent.client_order_id for intent in result_v2.dispatchable_intents])
+    print("v2 obligation:", result_v2.control_scheduling_obligation)
+
+
+if __name__ == "__main__":
+    main()

@@ -35,10 +35,18 @@ From the `core` repository root:
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
+python examples/core_step_quickstart.py
 ```
 
 Runtime integration tests may require separate runtime dependencies/environment setup. Keep core
 package validation centered on `core` tests in this repository.
+
+The runnable Core-only quickstart is at `examples/core_step_quickstart.py`. It demonstrates CoreStep
+mechanics (`run_core_step` and `CoreStepResult`) without runtime/adapter dispatch.
+
+Note: the example uses `ControlTimeEvent` because it is the smallest canonical event model to
+instantiate for a compact demo. This is not a claim that migrated runtime paths should productively
+evaluate strategy on control-time events.
 
 ## Architecture Entry Points
 

@@ -42,10 +42,11 @@ choices and are not part of this baseline.
 14. [Add a Canonical Event](how-to/add-canonical-event.md)
 15. [Add a CoreStep or CoreWakeupStep Test](how-to/add-core-step-test.md)
 16. [Extend ExecutionControl](how-to/extend-execution-control.md)
+17. [CoreStep Core-only Quickstart](how-to/core-step-quickstart.md)
 
 ### Roadmap
 
-17. [Post-MVP Roadmap](roadmap/post-mvp-roadmap.md)
+18. [Post-MVP Roadmap](roadmap/post-mvp-roadmap.md)
 
 ## Current Status Notes
 

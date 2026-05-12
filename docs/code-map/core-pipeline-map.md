@@ -5,6 +5,10 @@ This page maps CoreStep/CoreWakeupStep processing from concept to code.
 Runtime provides canonical inputs and later dispatches results. Core performs deterministic
 reduction and decision shaping, then returns `CoreStepResult`.
 
+For a runnable minimal example of this pipeline in Core-only form, see
+`examples/core_step_quickstart.py` and the short guide at
+`docs/how-to/core-step-quickstart.md`.
+
 This diagram summarizes the single-step pipeline and its outputs. External dispatch remains
 runtime-owned and happens after Core returns.
 
