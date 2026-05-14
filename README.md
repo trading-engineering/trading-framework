@@ -18,7 +18,7 @@ dispatch. The same Core is meant to stay stable while local Research, Backtestin
 simulation, Live trading, Venue Adapters, and infrastructure around you change.
 
 > Terminology: Definitions and related terms match the
-> [`canonical terminology`](https://tradingchassis.github.io/docs/latest/00-guides/terminology/).
+> [`canonical terminology`](https://tradingchassis.github.io/docs/latest/00-guides/terminology/).  
 > In-repo pointers: [`core/docs/README.md`](docs/README.md) and
 > [`core/docs/code-map/core-pipeline-map.md`](docs/code-map/core-pipeline-map.md).
 
@@ -83,7 +83,7 @@ into canonical Events, build `EventStreamEntry` sequences, and call the same
 Execution, scheduling glue, and Control-Time Event injection when a Control Scheduling Obligation is realized.
 
 ```mermaid
-flowchart TB
+flowchart LR
     BT["Backtesting Runtime"] --> CE["Canonical Events"]
     LV["Live Runtime"] --> CE
     RS["Research / local"] --> CE
