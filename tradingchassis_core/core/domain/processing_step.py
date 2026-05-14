@@ -1,9 +1,4 @@
-"""Higher-level Core step API skeleton.
-
-This module defines a transitional deterministic step entrypoint above the
-canonical reducer boundary. In this phase, it delegates to process_event_entry
-and returns an empty CoreStepResult contract value.
-"""
+"""Deterministic Core step orchestration over canonical reducer inputs."""
 
 from __future__ import annotations
 
@@ -16,7 +11,7 @@ from tradingchassis_core.core.domain.execution_control_apply import (
     apply_execution_control_plan,
 )
 from tradingchassis_core.core.domain.execution_control_decision import (
-    map_compat_gate_decision_to_execution_control_decision,
+    ExecutionControlDecision,
 )
 from tradingchassis_core.core.domain.execution_control_plan import (
     ExecutionControlCandidateInput,
@@ -26,30 +21,24 @@ from tradingchassis_core.core.domain.intent_combination import (
     combine_candidate_intent_records,
 )
 from tradingchassis_core.core.domain.policy_risk_decision import (
+    PolicyAdmissionResult,
     PolicyIntentEvaluator,
     apply_policy_to_candidate_records,
-    map_compat_gate_decision_to_policy_risk_decision,
 )
 from tradingchassis_core.core.domain.processing import process_event_entry
 from tradingchassis_core.core.domain.processing_order import EventStreamEntry, ProcessingPosition
 from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.step_decision import CoreStepDecision
 from tradingchassis_core.core.domain.step_result import CoreStepResult
-from tradingchassis_core.core.domain.types import ControlTimeEvent, OrderIntent
-from tradingchassis_core.core.execution_control.types import ControlSchedulingObligation
+from tradingchassis_core.core.domain.types import OrderIntent
 
 if TYPE_CHECKING:
     from tradingchassis_core.core.execution_control.execution_control import ExecutionControl
-    from tradingchassis_core.core.risk.risk_engine import GateDecision, RiskEngine
 
 
 @dataclass(frozen=True, slots=True)
 class CoreStepStrategyContext:
-    """Deterministic strategy-evaluation context for one Core step.
-
-    ``state`` is currently passed by reference for compatibility. Strategy
-    evaluators must treat it as read-only by contract in this scaffold slice.
-    """
+    """Deterministic strategy-evaluation context for one Core step."""
 
     state: StrategyState
     event: object
@@ -62,31 +51,6 @@ class CoreStepStrategyEvaluator(Protocol):
 
     def evaluate(self, context: CoreStepStrategyContext) -> Sequence[OrderIntent]:
         """Evaluate strategy once for the provided step context."""
-
-
-@dataclass(frozen=True, slots=True)
-class ControlTimeQueueReevaluationContext:
-    """Deterministic context for control-time queue re-evaluation in Core."""
-
-    risk_engine: RiskEngine
-    instrument: str
-    now_ts_ns_local: int
-
-
-@dataclass(frozen=True, slots=True)
-class CoreDecisionContext:
-    """Optional deterministic context for candidate-intent decision capture.
-
-    Notes:
-    - ``capture_only`` controls only result projection behavior.
-    - The compatibility RiskEngine path may still mutate queue/rate state.
-    """
-
-    risk_engine: RiskEngine
-    now_ts_ns_local: int
-    instrument: str | None = None
-    enable_candidate_intent_decision: bool = False
-    capture_only: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,50 +86,28 @@ class CoreWakeupReductionResult:
             object.__setattr__(self, "generated_intents", tuple(self.generated_intents))
 
 
-def _select_effective_control_scheduling_obligation(
-    decision: GateDecision,
-) -> ControlSchedulingObligation | None:
-    obligations = decision.control_scheduling_obligations
-    if not obligations:
-        return None
-    return min(
-        obligations,
-        key=lambda obligation: (
-            obligation.due_ts_ns_local,
-            obligation.obligation_key,
-        ),
-    )
-
-
-def _resolve_candidate_instrument(
-    *,
-    entry: EventStreamEntry,
-    control_time_queue_context: ControlTimeQueueReevaluationContext | None,
-) -> str | None:
+def _resolve_candidate_instrument(*, entry: EventStreamEntry) -> str | None:
     event_instrument = getattr(entry.event, "instrument", None)
     if isinstance(event_instrument, str):
         return event_instrument
-    if control_time_queue_context is not None:
-        return control_time_queue_context.instrument
     return None
 
 
-def _map_compat_gate_decision_to_core_step_decision(
+def _to_core_step_decision(
     *,
-    decision: GateDecision,
-    control_scheduling_obligation: ControlSchedulingObligation | None,
+    policy_result: PolicyAdmissionResult,
+    execution_control_decision: ExecutionControlDecision,
 ) -> CoreStepDecision:
     return CoreStepDecision(
-        policy_rejected_intents=tuple(rejected.intent for rejected in decision.rejected),
-        policy_risk_decision=map_compat_gate_decision_to_policy_risk_decision(decision),
-        execution_control_decision=map_compat_gate_decision_to_execution_control_decision(
-            decision,
-            control_scheduling_obligation=control_scheduling_obligation,
+        policy_rejected_intents=tuple(
+            rejected.record.intent for rejected in policy_result.rejected_generated
         ),
-        queued_effective_intents=tuple(decision.queued),
-        dispatchable_intents=tuple(decision.accepted_now),
-        execution_handled_intents=tuple(decision.handled_in_queue),
-        control_scheduling_obligation=control_scheduling_obligation,
+        policy_risk_decision=policy_result.policy_risk_decision,
+        execution_control_decision=execution_control_decision,
+        queued_effective_intents=execution_control_decision.queued_effective_intents,
+        dispatchable_intents=execution_control_decision.dispatchable_intents,
+        execution_handled_intents=execution_control_decision.execution_handled_intents,
+        control_scheduling_obligation=execution_control_decision.control_scheduling_obligation,
     )
 
 
@@ -174,35 +116,14 @@ def run_core_step(
     entry: EventStreamEntry,
     *,
     configuration: CoreConfiguration | None = None,
-    control_time_queue_context: ControlTimeQueueReevaluationContext | None = None,
     policy_admission_context: CorePolicyAdmissionContext | None = None,
     execution_control_apply_context: CoreExecutionControlApplyContext | None = None,
-    core_decision_context: CoreDecisionContext | None = None,
     strategy_evaluator: CoreStepStrategyEvaluator | None = None,
 ) -> CoreStepResult:
-    """Run one transitional Core step.
-
-    Behavior in this phase:
-    - delegates event processing to the canonical boundary via process_event_entry;
-    - computes generated/candidate intents deterministically;
-    - optionally captures compatibility decision projections via core_decision_context;
-    - preserves the existing control-time queue reevaluation compatibility path.
-    """
+    """Run one deterministic Core step."""
     if execution_control_apply_context is not None and policy_admission_context is None:
         raise ValueError(
             "execution_control_apply_context requires policy_admission_context"
-        )
-    if (
-        isinstance(entry.event, ControlTimeEvent)
-        and control_time_queue_context is not None
-        and (
-            policy_admission_context is not None
-            or execution_control_apply_context is not None
-        )
-    ):
-        raise ValueError(
-            "control_time_queue_context cannot be combined with "
-            "policy_admission_context or execution_control_apply_context"
         )
 
     process_event_entry(state, entry, configuration=configuration)
@@ -217,10 +138,7 @@ def run_core_step(
         )
         generated_intents = tuple(strategy_evaluator.evaluate(strategy_context))
 
-    snapshot_instrument = _resolve_candidate_instrument(
-        entry=entry,
-        control_time_queue_context=control_time_queue_context,
-    )
+    snapshot_instrument = _resolve_candidate_instrument(entry=entry)
     queued_snapshot = state.queued_intents_snapshot(snapshot_instrument)
     candidate_intent_records = combine_candidate_intent_records(
         generated_intents=generated_intents,
@@ -228,156 +146,66 @@ def run_core_step(
     )
     candidate_intents = tuple(record.intent for record in candidate_intent_records)
 
-    # Preserve the existing ControlTimeEvent compatibility path behavior.
-    if isinstance(entry.event, ControlTimeEvent) and control_time_queue_context is not None:
-        popped_intents = state.pop_queued_intents(control_time_queue_context.instrument)
-        if not popped_intents:
-            return CoreStepResult(
-                generated_intents=generated_intents,
-                candidate_intent_records=candidate_intent_records,
-                candidate_intents=candidate_intents,
-            )
-
-        decision = control_time_queue_context.risk_engine.decide_intents(
-            raw_intents=popped_intents,
-            state=state,
-            now_ts_ns_local=control_time_queue_context.now_ts_ns_local,
-        )
-        selected_obligation = _select_effective_control_scheduling_obligation(decision)
-        core_step_decision = _map_compat_gate_decision_to_core_step_decision(
-            decision=decision,
-            control_scheduling_obligation=selected_obligation,
-        )
+    if policy_admission_context is None:
         return CoreStepResult(
             generated_intents=generated_intents,
             candidate_intent_records=candidate_intent_records,
             candidate_intents=candidate_intents,
-            dispatchable_intents=tuple(decision.accepted_now),
-            control_scheduling_obligation=selected_obligation,
-            core_step_decision=core_step_decision,
-            compat_gate_decision=decision,
         )
 
-    if (
-        policy_admission_context is not None
-        and core_decision_context is not None
-        and core_decision_context.enable_candidate_intent_decision
-    ):
-        raise ValueError(
-            "policy_admission_context cannot be combined with "
-            "core_decision_context.enable_candidate_intent_decision=True"
+    policy_result = apply_policy_to_candidate_records(
+        candidate_intent_records,
+        state=state,
+        now_ts_ns_local=policy_admission_context.now_ts_ns_local,
+        policy_evaluator=policy_admission_context.policy_evaluator,
+    )
+    execution_control_plan = plan_execution_control_candidates(
+        ExecutionControlCandidateInput(
+            accepted_generated=policy_result.accepted_generated,
+            passthrough_queued=policy_result.passthrough_queued,
         )
-    if policy_admission_context is not None:
-        policy_result = apply_policy_to_candidate_records(
-            candidate_intent_records,
-            state=state,
-            now_ts_ns_local=policy_admission_context.now_ts_ns_local,
-            policy_evaluator=policy_admission_context.policy_evaluator,
-        )
-        execution_control_plan = plan_execution_control_candidates(
-            ExecutionControlCandidateInput(
-                accepted_generated=policy_result.accepted_generated,
-                passthrough_queued=policy_result.passthrough_queued,
-            )
-        )
-        apply_result = None
-        if execution_control_apply_context is not None:
-            apply_result = apply_execution_control_plan(
-                execution_control_plan,
-                ExecutionControlApplyContext(
-                    state=state,
-                    execution_control=execution_control_apply_context.execution_control,
-                    now_ts_ns_local=execution_control_apply_context.now_ts_ns_local,
-                    max_orders_per_sec=execution_control_apply_context.max_orders_per_sec,
-                    max_cancels_per_sec=execution_control_apply_context.max_cancels_per_sec,
-                ),
-            )
-        core_step_decision = CoreStepDecision(
-            policy_rejected_intents=tuple(
-                rejected.record.intent for rejected in policy_result.rejected_generated
-            ),
-            policy_risk_decision=policy_result.policy_risk_decision,
-            execution_control_decision=(
-                execution_control_plan.execution_control_decision
-                if apply_result is None
-                else apply_result.execution_control_decision
-            ),
-            queued_effective_intents=(
-                ()
-                if apply_result is None
-                else apply_result.execution_control_decision.queued_effective_intents
-            ),
-            dispatchable_intents=(
-                ()
-                if apply_result is None
-                else apply_result.execution_control_decision.dispatchable_intents
-            ),
-            execution_handled_intents=(
-                ()
-                if apply_result is None
-                else apply_result.execution_control_decision.execution_handled_intents
-            ),
-            control_scheduling_obligation=(
-                None
-                if apply_result is None
-                else apply_result.control_scheduling_obligation
-            ),
-        )
-        dispatchable_intents: tuple[OrderIntent, ...] = ()
-        control_scheduling_obligation = None
-        if apply_result is not None:
-            control_scheduling_obligation = apply_result.control_scheduling_obligation
-            if execution_control_apply_context.activate_dispatchable_outputs:
-                dispatchable_intents = tuple(
-                    record.record.intent for record in apply_result.dispatchable_records
-                )
-        return CoreStepResult(
-            generated_intents=generated_intents,
-            candidate_intent_records=candidate_intent_records,
-            candidate_intents=candidate_intents,
-            dispatchable_intents=dispatchable_intents,
-            control_scheduling_obligation=control_scheduling_obligation,
-            core_step_decision=core_step_decision,
-        )
-    if not isinstance(entry.event, ControlTimeEvent):
-        if (
-            core_decision_context is not None
-            and core_decision_context.enable_candidate_intent_decision
-            and candidate_intents
-        ):
-            if not core_decision_context.capture_only:
-                raise NotImplementedError(
-                    "core_decision_context capture_only=False is not supported yet"
-                )
-            decision = core_decision_context.risk_engine.decide_intents(
-                raw_intents=list(candidate_intents),
+    )
+
+    apply_result = None
+    if execution_control_apply_context is not None:
+        apply_result = apply_execution_control_plan(
+            execution_control_plan,
+            ExecutionControlApplyContext(
                 state=state,
-                now_ts_ns_local=core_decision_context.now_ts_ns_local,
-            )
-            selected_obligation = _select_effective_control_scheduling_obligation(decision)
-            core_step_decision = _map_compat_gate_decision_to_core_step_decision(
-                decision=decision,
-                control_scheduling_obligation=selected_obligation,
-            )
-            return CoreStepResult(
-                generated_intents=generated_intents,
-                candidate_intent_records=candidate_intent_records,
-                candidate_intents=candidate_intents,
-                core_step_decision=core_step_decision,
-                compat_gate_decision=decision,
-            )
-        return CoreStepResult(
-            generated_intents=generated_intents,
-            candidate_intent_records=candidate_intent_records,
-            candidate_intents=candidate_intents,
+                execution_control=execution_control_apply_context.execution_control,
+                now_ts_ns_local=execution_control_apply_context.now_ts_ns_local,
+                max_orders_per_sec=execution_control_apply_context.max_orders_per_sec,
+                max_cancels_per_sec=execution_control_apply_context.max_cancels_per_sec,
+            ),
         )
 
-    if control_time_queue_context is None:
-        return CoreStepResult(
-            generated_intents=generated_intents,
-            candidate_intent_records=candidate_intent_records,
-            candidate_intents=candidate_intents,
-        )
+    effective_execution_control_decision = (
+        execution_control_plan.execution_control_decision
+        if apply_result is None
+        else apply_result.execution_control_decision
+    )
+    core_step_decision = _to_core_step_decision(
+        policy_result=policy_result,
+        execution_control_decision=effective_execution_control_decision,
+    )
+
+    dispatchable_intents: tuple[OrderIntent, ...] = ()
+    control_scheduling_obligation = None
+    if apply_result is not None:
+        control_scheduling_obligation = apply_result.control_scheduling_obligation
+        if execution_control_apply_context.activate_dispatchable_outputs:
+            dispatchable_intents = tuple(
+                record.record.intent for record in apply_result.dispatchable_records
+            )
+
+    return CoreStepResult(
+        generated_intents=generated_intents,
+        candidate_intent_records=candidate_intent_records,
+        candidate_intents=candidate_intents,
+        dispatchable_intents=dispatchable_intents,
+        control_scheduling_obligation=control_scheduling_obligation,
+        core_step_decision=core_step_decision,
+    )
 
 
 def run_core_wakeup_reduction(
@@ -388,12 +216,7 @@ def run_core_wakeup_reduction(
     strategy_evaluator: CoreStepStrategyEvaluator | None = None,
     strategy_event_filter: Callable[[object], bool] | None = None,
 ) -> CoreWakeupReductionResult:
-    """Reduce multiple canonical entries and collect wakeup-level generated intents.
-
-    This reducer phase intentionally performs no policy, no execution-control plan,
-    and no execution-control apply.
-    """
-
+    """Reduce multiple canonical entries and collect wakeup-level generated intents."""
     entries_tuple = tuple(entries)
     generated_intents: list[OrderIntent] = []
     for entry in entries_tuple:
@@ -468,34 +291,14 @@ def run_core_wakeup_decision(
                 max_cancels_per_sec=execution_control_apply_context.max_cancels_per_sec,
             ),
         )
-    core_step_decision = CoreStepDecision(
-        policy_rejected_intents=tuple(
-            rejected.record.intent for rejected in policy_result.rejected_generated
-        ),
-        policy_risk_decision=policy_result.policy_risk_decision,
-        execution_control_decision=(
-            execution_control_plan.execution_control_decision
-            if apply_result is None
-            else apply_result.execution_control_decision
-        ),
-        queued_effective_intents=(
-            ()
-            if apply_result is None
-            else apply_result.execution_control_decision.queued_effective_intents
-        ),
-        dispatchable_intents=(
-            ()
-            if apply_result is None
-            else apply_result.execution_control_decision.dispatchable_intents
-        ),
-        execution_handled_intents=(
-            ()
-            if apply_result is None
-            else apply_result.execution_control_decision.execution_handled_intents
-        ),
-        control_scheduling_obligation=(
-            None if apply_result is None else apply_result.control_scheduling_obligation
-        ),
+    effective_execution_control_decision = (
+        execution_control_plan.execution_control_decision
+        if apply_result is None
+        else apply_result.execution_control_decision
+    )
+    core_step_decision = _to_core_step_decision(
+        policy_result=policy_result,
+        execution_control_decision=effective_execution_control_decision,
     )
     dispatchable_intents: tuple[OrderIntent, ...] = ()
     control_scheduling_obligation = None

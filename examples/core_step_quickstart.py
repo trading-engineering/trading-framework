@@ -1,16 +1,4 @@
-"""Core-only CoreStep quickstart example.
-
-Run from the core repository root:
-    python examples/core_step_quickstart.py
-
-This script demonstrates CoreStep mechanics only:
-canonical event in -> run_core_step -> CoreStepResult out.
-
-ControlTimeEvent is used here because it is the smallest canonical event to
-construct for a compact example. This is not a statement that migrated runtime
-paths should productively evaluate strategy on ControlTimeEvent; runtime-owned
-behavior remains documented in the corresponding architecture docs.
-"""
+"""Core-only CoreStep quickstart example."""
 
 from __future__ import annotations
 
@@ -21,16 +9,6 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import tradingchassis_core as tc
-
-# Internal import gap: ControlTimeEvent is canonical but not currently exported
-# from the package root.
-from tradingchassis_core.core.domain.types import ControlTimeEvent
-# Internal import gap: StrategyState requires an EventBus; NullEventBus is the
-# smallest no-op bus.
-from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
-# Internal import gap: execution-control apply requires an ExecutionControl
-# instance and this type is not currently exported from package root.
-from tradingchassis_core.core.execution_control.execution_control import ExecutionControl
 
 INSTRUMENT = "BTC-USDC-PERP"
 INTENT_ID_V1 = "quickstart-new-v1"
@@ -63,7 +41,13 @@ class OneIntentEvaluator:
 class AllowAllPolicy:
     """Policy evaluator that admits every generated candidate intent."""
 
-    def evaluate_policy_intent(self, *, intent: tc.OrderIntent, state: tc.StrategyState, now_ts_ns_local: int) -> tuple[bool, str | None]:
+    def evaluate_policy_intent(
+        self,
+        *,
+        intent: tc.OrderIntent,
+        state: tc.StrategyState,
+        now_ts_ns_local: int,
+    ) -> tuple[bool, str | None]:
         _ = (intent, state, now_ts_ns_local)
         return True, None
 
@@ -71,7 +55,7 @@ class AllowAllPolicy:
 def _control_time_entry(*, index: int, ts_ns_local: int) -> tc.EventStreamEntry:
     return tc.EventStreamEntry(
         position=tc.ProcessingPosition(index=index),
-        event=ControlTimeEvent(
+        event=tc.ControlTimeEvent(
             ts_ns_local_control=ts_ns_local,
             reason="scheduled_control_recheck",
             due_ts_ns_local=ts_ns_local,
@@ -84,8 +68,6 @@ def _control_time_entry(*, index: int, ts_ns_local: int) -> tc.EventStreamEntry:
 
 
 def run_v1_generated_only(state: tc.StrategyState) -> tc.CoreStepResult:
-    """Smallest CoreStep usage: generated and candidate intents only."""
-
     result = tc.run_core_step(
         state,
         _control_time_entry(index=0, ts_ns_local=1_000),
@@ -100,8 +82,6 @@ def run_v1_generated_only(state: tc.StrategyState) -> tc.CoreStepResult:
 
 
 def run_v2_with_policy_and_apply(state: tc.StrategyState) -> tc.CoreStepResult:
-    """Optional Core-only extension: policy admission + execution-control apply."""
-
     result = tc.run_core_step(
         state,
         _control_time_entry(index=1, ts_ns_local=1_001),
@@ -111,7 +91,7 @@ def run_v2_with_policy_and_apply(state: tc.StrategyState) -> tc.CoreStepResult:
             now_ts_ns_local=1_001,
         ),
         execution_control_apply_context=tc.CoreExecutionControlApplyContext(
-            execution_control=ExecutionControl(),
+            execution_control=tc.ExecutionControl(),
             now_ts_ns_local=1_001,
             activate_dispatchable_outputs=True,
         ),
@@ -122,7 +102,7 @@ def run_v2_with_policy_and_apply(state: tc.StrategyState) -> tc.CoreStepResult:
 
 
 def main() -> None:
-    state = tc.StrategyState(event_bus=NullEventBus())
+    state = tc.StrategyState(event_bus=tc.NullEventBus())
     result_v1 = run_v1_generated_only(state)
     result_v2 = run_v2_with_policy_and_apply(state)
 

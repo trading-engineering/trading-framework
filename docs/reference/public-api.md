@@ -1,91 +1,51 @@
 # Public API Reference
 
-This reference is manual and curated for the current MVP baseline. Generated API docs may be added
-later.
+The package export boundary is `tradingchassis_core`.
 
-Stability tags used here:
+## Canonical events
 
-- **Stable MVP**: current baseline contract to rely on
-- **Compatibility**: transitional bridge surface
-- **Internal-shape exposed**: exported today but better treated as implementation-adjacent
+- `MarketEvent`
+- `ControlTimeEvent`
+- `OrderSubmittedEvent`
+- `OrderExecutionFeedbackEvent`
+- `FillEvent`
 
-## Core step APIs
-
-Stable MVP:
+## Step APIs
 
 - `run_core_step`
 - `run_core_wakeup_reduction`
 - `run_core_wakeup_decision`
 - `run_core_wakeup_step`
 
-Purpose: deterministic Core entry points for step and wakeup-level processing.
+## Step inputs/outputs
 
-## Result and decision models
-
-Stable MVP (with transitional fields where noted):
-
-- `CoreStepResult` (includes compatibility bridge field `compat_gate_decision`)
+- `EventStreamEntry`
+- `ProcessingPosition`
+- `CorePolicyAdmissionContext`
+- `CoreExecutionControlApplyContext`
 - `CoreStepDecision`
-- `PolicyRiskDecision`
-- `ExecutionControlDecision`
+- `CoreStepResult`
+- `CoreWakeupReductionResult`
 
-Purpose: structured step outcomes and policy/execution-control projections.
+## Supporting deterministic models
 
-## Candidate intent models
-
-Stable MVP:
-
+- `CoreConfiguration`
+- `StrategyState`
 - `CandidateIntentRecord`
 - `CandidateIntentOrigin`
+- `PolicyRiskDecision`
+- `ExecutionControlDecision`
+- `ExecutionControl`
+- `ControlSchedulingObligation`
 
-Purpose: explicit candidate provenance and deterministic merge ordering metadata.
+## Utility exports
 
-## Event stream models
+- `NullEventBus`
+- `RiskEngine` (policy-only evaluator)
 
-Stable MVP:
+## Removed compatibility contracts
 
-- `ProcessingPosition`
-- `EventStreamEntry`
-
-Purpose: canonical ingestion ordering envelope for deterministic reduction.
-
-## Canonical event models
-
-Stable MVP:
-
-- `MarketEvent`
-- `ControlTimeEvent`
-- `OrderSubmittedEvent`
-- `OrderExecutionFeedbackEvent`
-
-Canonical model with caveat:
-
-- `FillEvent` is canonical in the model taxonomy, but it is not the snapshot-only rc3 MVP ingress.
-
-## Strategy/config/state-facing models
-
-Stable MVP:
-
-- `Strategy`
-- `StrategyState`
-- `CoreConfiguration`
-- `EngineContext`
-
-Purpose: strategy contract and deterministic configuration/state interaction surface.
-
-## Compatibility and transitional surfaces
-
-Compatibility:
-
-- `GateDecision` (legacy/default-off compatibility decision model)
-- `CoreStepResult.compat_gate_decision` (bridge field for compatibility paths)
-
-Compatibility/non-canonical model context:
-
-- `OrderStateEvent` remains compatibility/non-canonical in current MVP docs.
-
-## Export boundary note
-
-`tradingchassis_core.__init__` is the intended package export boundary. Not every exported symbol
-should be treated as long-term stable final architecture; compatibility surfaces are explicitly
-transitional.
+- `GateDecision`
+- `CoreStepResult.compat_gate_decision`
+- `ControlTimeQueueReevaluationContext`
+- `CoreDecisionContext`

@@ -1,71 +1,41 @@
 # TradingChassis Core
 
-Deterministic semantic core package for TradingChassis.
+`tradingchassis_core` is a deterministic Core package.
 
-This repository provides `tradingchassis_core`, the reusable core library that defines canonical
-event processing contracts, state reduction boundaries, and CoreStep/CoreWakeupStep APIs.
+It owns one architecture:
 
-## What This Package Is
+`EventStreamEntry -> run_core_step/run_core_wakeup_step -> candidate intents -> policy admission -> execution-control apply -> CoreStepResult`
 
-- A deterministic core processing library for canonical event-driven semantics
-- The home of CoreStep/CoreWakeupStep orchestration contracts
-- A package that returns runtime-facing outputs such as
-  `CoreStepResult.dispatchable_intents` and compatibility bridge data where needed
+## Scope
 
-## What This Package Is Not
+Core owns:
 
-- Not venue/runtime I/O ownership
-- Not a venue adapter or venue runtime shell
-- Not a complete final live trading stack by itself
+- canonical event models (`MarketEvent`, `ControlTimeEvent`, `OrderSubmittedEvent`, `OrderExecutionFeedbackEvent`, `FillEvent`)
+- deterministic state reduction
+- strategy evaluator protocol
+- candidate intent combination + provenance
+- policy admission semantics
+- execution-control semantics (queue/rate/inflight/sendability)
+- `CoreStepResult` outputs (`dispatchable_intents`, `control_scheduling_obligation`)
 
-## Current Status (Accepted MVP Baseline)
+Core does not own:
 
-- The CoreStep MVP baseline is accepted and frozen
-- Migrated paths exist behind flags that remain default `false`
-- Runtime dispatches `CoreStepResult.dispatchable_intents` on migrated flag-on paths
-- Runtime does not productively use runtime `risk.decide_intents` or `GateDecision` on migrated
-  flag-on paths
-- `GateDecision` remains a temporary compatibility mechanism for legacy/default-off paths
-- This MVP is not the final architecture
+- venue/backtest/live I/O
+- runtime dispatch and runtime execution errors
+- adapter integrations or `hftbacktest`
+- runtime config file loading and deployment wiring
 
 ## Quickstart
 
-From the `core` repository root:
+From the `core` directory:
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest
 python examples/core_step_quickstart.py
+python -m pytest -q tests/semantics/examples/test_core_step_quickstart.py
 ```
 
-Runtime integration tests may require separate runtime dependencies/environment setup. Keep core
-package validation centered on `core` tests in this repository.
+## Docs
 
-The runnable Core-only quickstart is at `examples/core_step_quickstart.py`. It demonstrates CoreStep
-mechanics (`run_core_step` and `CoreStepResult`) without runtime/adapter dispatch.
-
-Note: the example uses `ControlTimeEvent` because it is the smallest canonical event model to
-instantiate for a compact demo. This is not a claim that migrated runtime paths should productively
-evaluate strategy on control-time events.
-
-## Architecture Entry Points
-
-- Docs start page: `docs/README.md`
-- CoreStep MVP baseline: `docs/core-step-mvp-baseline.md`
-- Core vs Runtime responsibilities: `docs/core-runtime-responsibility-model.md`
-- Event model: `docs/event-model.md`
-- Risk vs execution control boundary: `docs/risk-vs-execution-control.md`
-- GateDecision compatibility status: `docs/gate-decision-compatibility.md`
-
-## Minimal Public API Orientation
-
-- Step entry points: `run_core_step`, `run_core_wakeup_step`
-- Runtime-facing dispatch output: `CoreStepResult.dispatchable_intents`
-- Canonical event models include `MarketEvent`, `ControlTimeEvent`, `OrderSubmittedEvent`, and
-  `OrderExecutionFeedbackEvent`
-
-## Repository Guidance
-
-- Contributing guide: `CONTRIBUTING.md`
-- Changelog: `CHANGELOG.md`
-- Security policy: `SECURITY.md`
+- `docs/README.md`
+- `docs/reference/public-api.md`

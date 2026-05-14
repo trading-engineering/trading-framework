@@ -1,56 +1,19 @@
-# TradingChassis Core Documentation
+# TradingChassis Core Docs
 
-This directory is the current documentation start point for the `core` repository.
+This documentation set describes the clean Core package only.
 
-Documentation intent follows a Concept -> Flow -> Code -> API progression.
+## Contents
 
-Manual Markdown is used for now. MkDocs, mkdocstrings, and Mermaid are optional future tooling
-choices and are not part of this baseline.
+- `reference/public-api.md`: supported root exports and step contracts
 
-## Recommended Reading Order
+## Architectural baseline
 
-### MVP and status
+The only supported processing architecture is:
 
-1. [CoreStep MVP Baseline](mvp/core-step-mvp-baseline.md)
-2. [Compatibility Matrix](mvp/compatibility-matrix.md)
-
-### Concepts
-
-3. [Runtime/Core Responsibility Model](concepts/core-runtime-responsibility-model.md)
-4. [Event Model](concepts/event-model.md)
-5. [Risk vs ExecutionControl](concepts/risk-vs-execution-control.md)
-6. [GateDecision Compatibility](concepts/gate-decision-compatibility.md)
-
-### Flows
-
-7. [Control Time and Scheduling](flows/control-time-and-scheduling.md)
-8. [OrderSubmittedEvent](flows/order-submitted-event.md)
-9. [OrderExecutionFeedbackEvent (rc3 MVP path)](flows/order-execution-feedback-event.md)
-
-### Code map
-
-10. [Repository Map](code-map/repository-map.md)
-11. [Core Pipeline Map](code-map/core-pipeline-map.md)
-
-### Reference
-
-12. [Public API Reference](reference/public-api.md)
-13. [Events Reference](reference/events-reference.md)
-
-### How-to
-
-14. [Add a Canonical Event](how-to/add-canonical-event.md)
-15. [Add a CoreStep or CoreWakeupStep Test](how-to/add-core-step-test.md)
-16. [Extend ExecutionControl](how-to/extend-execution-control.md)
-17. [CoreStep Core-only Quickstart](how-to/core-step-quickstart.md)
-
-### Roadmap
-
-18. [Post-MVP Roadmap](roadmap/post-mvp-roadmap.md)
-
-## Current Status Notes
-
-- The CoreStep MVP baseline is accepted and frozen.
-- Migrated paths remain behind flags that are default `false`.
-- `GateDecision` remains compatibility for legacy/default-off behavior.
-- This MVP is not the final architecture.
+1. canonical `EventStreamEntry` ingestion
+2. deterministic state reduction
+3. strategy evaluation
+4. candidate intent combination
+5. policy admission
+6. execution-control planning/apply
+7. `CoreStepResult` outputs for runtime dispatch/scheduling

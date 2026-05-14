@@ -1,8 +1,4 @@
-"""Public API for the tradingchassis_core package.
-
-Only symbols imported here are considered part of the stable,
-supported external interface.
-"""
+"""Public API for the tradingchassis_core package."""
 
 from __future__ import annotations
 
@@ -38,75 +34,54 @@ from tradingchassis_core.core.domain.processing_order import (
     ProcessingPosition,
 )
 from tradingchassis_core.core.domain.processing_step import (
-    ControlTimeQueueReevaluationContext,
-    CoreDecisionContext,
     CoreExecutionControlApplyContext,
     CorePolicyAdmissionContext,
+    CoreStepStrategyContext,
+    CoreStepStrategyEvaluator,
     CoreWakeupReductionResult,
     run_core_step,
     run_core_wakeup_decision,
     run_core_wakeup_reduction,
     run_core_wakeup_step,
 )
-
-# ----------------------------------------------------------------------
-# Backtest Engine API
-# ----------------------------------------------------------------------
-#
-# Backtest engine/runtime code is runtime-owned and has moved to the
-# Core Runtime repository (import from `core_runtime.backtest.*`).
-#
-# This semantic-core package must remain importable without the runtime layer.
 from tradingchassis_core.core.domain.slots import (
     SlotKey,
     stable_slot_order_id,
 )
-
-# ----------------------------------------------------------------------
-# Domain Types (used by strategies)
-# ----------------------------------------------------------------------
 from tradingchassis_core.core.domain.state import StrategyState
 from tradingchassis_core.core.domain.step_decision import CoreStepDecision
 from tradingchassis_core.core.domain.step_result import CoreStepResult
 from tradingchassis_core.core.domain.types import (
+    ControlTimeEvent,
+    FillEvent,
     MarketEvent,
     NewOrderIntent,
+    NotionalLimits,
+    OrderExecutionFeedbackEvent,
     OrderIntent,
+    OrderSubmittedEvent,
     Price,
     Quantity,
     ReplaceOrderIntent,
     RiskConstraints,
 )
-from tradingchassis_core.core.ports.engine_context import EngineContext
-
-# ----------------------------------------------------------------------
-# Config API (used by consumers)
-# ----------------------------------------------------------------------
+from tradingchassis_core.core.events.sinks.null_event_bus import NullEventBus
+from tradingchassis_core.core.execution_control.execution_control import ExecutionControl
 from tradingchassis_core.core.risk.risk_config import RiskConfig
-from tradingchassis_core.core.risk.risk_engine import GateDecision
-
-# ----------------------------------------------------------------------
-# Strategy Interface
-# ----------------------------------------------------------------------
-from tradingchassis_core.strategies.base import Strategy
-from tradingchassis_core.strategies.strategy_config import StrategyConfig
-
-# ----------------------------------------------------------------------
-# Public API definition
-# ----------------------------------------------------------------------
+from tradingchassis_core.core.risk.risk_engine import RiskEngine
 
 __all__ = [
-    # Config
+    "CoreConfiguration",
     "RiskConfig",
-    "StrategyConfig",
-
-    # Strategy interface
-    "Strategy",
-
-    # Strategy-facing domain API
+    "RiskEngine",
     "StrategyState",
     "MarketEvent",
+    "ControlTimeEvent",
+    "OrderSubmittedEvent",
+    "OrderExecutionFeedbackEvent",
+    "FillEvent",
     "RiskConstraints",
+    "NotionalLimits",
     "OrderIntent",
     "NewOrderIntent",
     "ReplaceOrderIntent",
@@ -114,23 +89,21 @@ __all__ = [
     "Quantity",
     "SlotKey",
     "stable_slot_order_id",
-    "EngineContext",
-    "GateDecision",
-    "CoreConfiguration",
     "CandidateIntentOrigin",
     "CandidateIntentRecord",
     "ProcessingPosition",
     "EventStreamEntry",
     "process_event_entry",
+    "fold_event_stream_entries",
     "run_core_step",
     "run_core_wakeup_reduction",
     "run_core_wakeup_decision",
     "run_core_wakeup_step",
-    "CoreDecisionContext",
+    "CoreStepStrategyContext",
+    "CoreStepStrategyEvaluator",
     "CoreExecutionControlApplyContext",
     "CorePolicyAdmissionContext",
     "CoreWakeupReductionResult",
-    "ControlTimeQueueReevaluationContext",
     "ExecutionControlDecision",
     "ExecutionControlApplyContext",
     "ExecutionControlApplyResult",
@@ -142,16 +115,11 @@ __all__ = [
     "PolicyRejectedCandidate",
     "PolicyAdmissionResult",
     "CoreStepDecision",
-    "fold_event_stream_entries",
     "CoreStepResult",
-
-    # Version
+    "ExecutionControl",
+    "NullEventBus",
     "__version__",
 ]
-
-# ----------------------------------------------------------------------
-# Package version
-# ----------------------------------------------------------------------
 
 try:
     __version__ = version("tradingchassis-core")

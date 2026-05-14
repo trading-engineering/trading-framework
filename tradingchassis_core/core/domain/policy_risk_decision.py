@@ -1,4 +1,4 @@
-"""Core-owned policy-risk decision scaffold and policy admission helpers."""
+"""Core-owned policy-risk decision model and policy admission helpers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from tradingchassis_core.core.domain.candidate_intent import (
     CandidateIntentRecord,
 )
 from tradingchassis_core.core.domain.types import OrderIntent
-from tradingchassis_core.core.risk.risk_engine import GateDecision
 
 if TYPE_CHECKING:
     from tradingchassis_core.core.domain.state import StrategyState
@@ -38,17 +37,9 @@ class PolicyRiskDecision:
 
     def __post_init__(self) -> None:
         if not isinstance(self.accepted_intents, tuple):
-            object.__setattr__(
-                self,
-                "accepted_intents",
-                tuple(self.accepted_intents),
-            )
+            object.__setattr__(self, "accepted_intents", tuple(self.accepted_intents))
         if not isinstance(self.rejected_intents, tuple):
-            object.__setattr__(
-                self,
-                "rejected_intents",
-                tuple(self.rejected_intents),
-            )
+            object.__setattr__(self, "rejected_intents", tuple(self.rejected_intents))
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,23 +61,11 @@ class PolicyAdmissionResult:
 
     def __post_init__(self) -> None:
         if not isinstance(self.accepted_generated, tuple):
-            object.__setattr__(
-                self,
-                "accepted_generated",
-                tuple(self.accepted_generated),
-            )
+            object.__setattr__(self, "accepted_generated", tuple(self.accepted_generated))
         if not isinstance(self.rejected_generated, tuple):
-            object.__setattr__(
-                self,
-                "rejected_generated",
-                tuple(self.rejected_generated),
-            )
+            object.__setattr__(self, "rejected_generated", tuple(self.rejected_generated))
         if not isinstance(self.passthrough_queued, tuple):
-            object.__setattr__(
-                self,
-                "passthrough_queued",
-                tuple(self.passthrough_queued),
-            )
+            object.__setattr__(self, "passthrough_queued", tuple(self.passthrough_queued))
 
 
 def apply_policy_to_candidate_records(
@@ -96,13 +75,7 @@ def apply_policy_to_candidate_records(
     now_ts_ns_local: int,
     policy_evaluator: PolicyIntentEvaluator,
 ) -> PolicyAdmissionResult:
-    """Apply policy admission to generated-origin candidates only.
-
-    Side-effect contract:
-    - does not mutate candidate records;
-    - does not mutate queue/rate/inflight state by itself;
-    - does not emit events by itself.
-    """
+    """Apply policy admission to generated-origin candidates only."""
 
     accepted_generated: list[CandidateIntentRecord] = []
     rejected_generated: list[PolicyRejectedCandidate] = []
@@ -144,22 +117,4 @@ def apply_policy_to_candidate_records(
             accepted_intents=tuple(accepted_intents),
             rejected_intents=tuple(rejected_intents),
         ),
-    )
-
-
-def map_compat_gate_decision_to_policy_risk_decision(
-    decision: GateDecision,
-) -> PolicyRiskDecision:
-    """Project compatibility GateDecision into policy-only scaffold fields.
-
-    Notes:
-    - ``accepted_intents`` currently maps from ``accepted_now`` because the
-      compatibility gate does not expose a strict pre-execution-control
-      policy-accepted set.
-    - ``rejected_intents`` maps from the explicit rejected intent records.
-    """
-
-    return PolicyRiskDecision(
-        accepted_intents=tuple(decision.accepted_now),
-        rejected_intents=tuple(rejected.intent for rejected in decision.rejected),
     )
