@@ -83,13 +83,11 @@ into canonical Events, build `EventStreamEntry` sequences, and call the same
 Execution, scheduling glue, and Control-Time Event injection when a Control Scheduling Obligation is realized.
 
 ```mermaid
-flowchart LR
-    BT["Backtesting Runtime"] --> CE["Canonical Events"]
-    LV["Live Runtime"] --> CE
-    RS["Research / local"] --> CE
-    CE --> CORE["TradingChassis Core<br/>deterministic decision kernel"]
-    CORE --> RES["CoreStepResult<br/>dispatchable Intents + Control Scheduling Obligation"]
-    RES --> RT["Runtime<br/>dispatch / scheduling / I/O"]
+flowchart TB
+    R1["Runtime:<br/>canonical Event"] --> Entry["EventStreamEntry:<br/>canonical Event + ProcessingPosition"]
+    Entry --> Core["TradingChassis Core:<br/>CoreStep / CoreWakeupStep"]
+    Core --> Result["CoreStepResult:<br/>dispatchable Intents + Control Scheduling Obligation"]
+    Result --> R2["Runtime:<br/>dispatch / scheduling / I/O"]
 ```
 
 Core never replaces the Runtime: the Runtime is responsible for feeding canonical
