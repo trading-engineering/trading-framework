@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 import tradingchassis_core as tc
 
 _MODULE_PATH = Path(__file__).resolve().parents[3] / "examples" / "core_step_quickstart.py"
@@ -13,6 +15,14 @@ assert _SPEC is not None
 assert _SPEC.loader is not None
 _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
+
+
+def test_core_step_quickstart_is_core_only() -> None:
+    source = _MODULE_PATH.read_text(encoding="utf-8")
+    assert "import tradingchassis_core as tc" in source
+    assert "from tradingchassis_core.core" not in source
+    assert "hftbacktest" not in source
+    assert "core_runtime" not in source
 
 
 def test_core_step_quickstart_v1_generated_and_candidates() -> None:
@@ -41,3 +51,15 @@ def test_core_step_quickstart_v2_dispatchable_output() -> None:
     assert tuple(intent.client_order_id for intent in result.dispatchable_intents) == (
         _MODULE.INTENT_ID_V2,
     )
+
+
+def test_core_step_quickstart_main_prints_core_boundary(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _MODULE.main()
+    captured = capsys.readouterr()
+    output = captured.out
+    assert "CoreStep quickstart (Core-only deterministic engine)" in output
+    assert "v1 generated" in output
+    assert "v1 dispatchable: [] (Core does not dispatch externally)" in output
+    assert "Runtime dispatches these later" in output

@@ -79,6 +79,25 @@ class _DuplicateIntentEvaluator:
         return [first, second]
 
 
+class _IndexedIntentEvaluator:
+    def evaluate(self, context: tc.CoreStepStrategyContext) -> list[tc.NewOrderIntent]:
+        idx = context.position.index
+        return [
+            tc.NewOrderIntent(
+                intent_type="new",
+                ts_ns_local=100 + idx,
+                instrument="BTC-USDC-PERP",
+                client_order_id=f"wake-{idx}",
+                intents_correlation_id=f"wake-corr-{idx}",
+                side="buy",
+                order_type="limit",
+                intended_qty=tc.Quantity(value=1.0, unit="contracts"),
+                intended_price=tc.Price(currency="USDC", value=100.0 + idx),
+                time_in_force="GTC",
+            )
+        ]
+
+
 def _control_entry(index: int, ts: int) -> tc.EventStreamEntry:
     return tc.EventStreamEntry(
         position=tc.ProcessingPosition(index=index),
@@ -112,6 +131,9 @@ def test_run_core_step_clean_pipeline_dispatchable() -> None:
     )
     assert tuple(intent.client_order_id for intent in result.generated_intents) == ("intent-1",)
     assert tuple(intent.client_order_id for intent in result.candidate_intents) == ("intent-1",)
+    assert tuple(record.origin for record in result.candidate_intent_records) == (
+        tc.CandidateIntentOrigin.GENERATED,
+    )
     assert tuple(intent.client_order_id for intent in result.dispatchable_intents) == ("intent-1",)
     assert result.core_step_decision is not None
 
@@ -121,6 +143,8 @@ def test_run_core_step_processes_entry_before_strategy_evaluation() -> None:
         def evaluate(self, context: tc.CoreStepStrategyContext) -> list[tc.OrderIntent]:
             # ControlTimeEvent reduction updates monotone timestamp before evaluation.
             assert context.state.sim_ts_ns_local == 100
+            assert isinstance(context.event, tc.ControlTimeEvent)
+            assert context.position.index == 0
             return []
 
     state = tc.StrategyState(event_bus=tc.NullEventBus())
@@ -152,6 +176,61 @@ def test_run_core_wakeup_step_clean_pipeline_dispatchable() -> None:
     assert len(result.generated_intents) == 2
     assert len(result.candidate_intent_records) == 1
     assert len(result.dispatchable_intents) == 1
+
+
+def test_run_core_wakeup_step_matches_reduction_then_decision_path() -> None:
+    entries = (_control_entry(0, 100), _control_entry(1, 101))
+    reduction_state = tc.StrategyState(event_bus=tc.NullEventBus())
+    reduction = tc.run_core_wakeup_reduction(
+        reduction_state,
+        entries,
+        strategy_evaluator=_IndexedIntentEvaluator(),
+        strategy_event_filter=lambda _event: True,
+    )
+    decision_result = tc.run_core_wakeup_decision(
+        reduction_state,
+        reduction,
+        policy_admission_context=tc.CorePolicyAdmissionContext(
+            policy_evaluator=_AllowAllPolicy(),
+            now_ts_ns_local=101,
+        ),
+        execution_control_apply_context=tc.CoreExecutionControlApplyContext(
+            execution_control=tc.ExecutionControl(),
+            now_ts_ns_local=101,
+            activate_dispatchable_outputs=True,
+        ),
+    )
+
+    step_state = tc.StrategyState(event_bus=tc.NullEventBus())
+    step_result = tc.run_core_wakeup_step(
+        step_state,
+        entries,
+        strategy_evaluator=_IndexedIntentEvaluator(),
+        strategy_event_filter=lambda _event: True,
+        policy_admission_context=tc.CorePolicyAdmissionContext(
+            policy_evaluator=_AllowAllPolicy(),
+            now_ts_ns_local=101,
+        ),
+        execution_control_apply_context=tc.CoreExecutionControlApplyContext(
+            execution_control=tc.ExecutionControl(),
+            now_ts_ns_local=101,
+            activate_dispatchable_outputs=True,
+        ),
+    )
+
+    assert tuple(intent.client_order_id for intent in decision_result.generated_intents) == (
+        "wake-0",
+        "wake-1",
+    )
+    assert tuple(intent.client_order_id for intent in step_result.generated_intents) == (
+        "wake-0",
+        "wake-1",
+    )
+    assert tuple(intent.client_order_id for intent in step_result.dispatchable_intents) == (
+        "wake-0",
+        "wake-1",
+    )
+    assert decision_result == step_result
 
 
 def test_candidate_reconciliation_prefers_latest_same_key_generated_intent() -> None:
@@ -188,6 +267,9 @@ def test_policy_rejection_prevents_dispatchable_intents() -> None:
     assert result.dispatchable_intents == ()
     assert result.core_step_decision is not None
     assert len(result.core_step_decision.policy_rejected_intents) == 1
+    assert result.core_step_decision.policy_risk_decision is not None
+    assert len(result.core_step_decision.policy_risk_decision.accepted_intents) == 0
+    assert len(result.core_step_decision.policy_risk_decision.rejected_intents) == 1
 
 
 def test_execution_control_deferral_returns_scheduling_obligation() -> None:
@@ -210,6 +292,18 @@ def test_execution_control_deferral_returns_scheduling_obligation() -> None:
     assert result.dispatchable_intents == ()
     assert result.control_scheduling_obligation is not None
     assert result.control_scheduling_obligation.reason == "rate_limit"
+
+
+def test_core_step_generated_only_mode_never_dispatches_externally() -> None:
+    state = tc.StrategyState(event_bus=tc.NullEventBus())
+    result = tc.run_core_step(
+        state,
+        _control_entry(0, 100),
+        strategy_evaluator=_OneIntentEvaluator(),
+    )
+    assert tuple(intent.client_order_id for intent in result.generated_intents) == ("intent-1",)
+    assert result.core_step_decision is None
+    assert result.dispatchable_intents == ()
 
 
 def test_process_canonical_event_reduces_market_event() -> None:

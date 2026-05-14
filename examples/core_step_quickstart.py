@@ -53,6 +53,8 @@ class AllowAllPolicy:
 
 
 def _control_time_entry(*, index: int, ts_ns_local: int) -> tc.EventStreamEntry:
+    # EventStreamEntry is the ordered Core input unit: a canonical event plus
+    # ProcessingPosition telling Core where this event sits in the stream.
     return tc.EventStreamEntry(
         position=tc.ProcessingPosition(index=index),
         event=tc.ControlTimeEvent(
@@ -68,6 +70,9 @@ def _control_time_entry(*, index: int, ts_ns_local: int) -> tc.EventStreamEntry:
 
 
 def run_v1_generated_only(state: tc.StrategyState) -> tc.CoreStepResult:
+    # v1 shows the minimum deterministic step: Core reduces one canonical event
+    # and strategy evaluation emits generated intents. No policy/apply contexts
+    # are provided yet, so Core returns zero dispatchable intents by design.
     result = tc.run_core_step(
         state,
         _control_time_entry(index=0, ts_ns_local=1_000),
@@ -82,6 +87,8 @@ def run_v1_generated_only(state: tc.StrategyState) -> tc.CoreStepResult:
 
 
 def run_v2_with_policy_and_apply(state: tc.StrategyState) -> tc.CoreStepResult:
+    # v2 adds policy admission and execution-control apply. With dispatchable
+    # outputs activated, Core exposes intents that Runtime can dispatch later.
     result = tc.run_core_step(
         state,
         _control_time_entry(index=1, ts_ns_local=1_001),
@@ -102,19 +109,25 @@ def run_v2_with_policy_and_apply(state: tc.StrategyState) -> tc.CoreStepResult:
 
 
 def main() -> None:
+    # StrategyState holds deterministic Core memory across steps
+    # (market snapshots, queued intents, monotone timestamps, etc.).
     state = tc.StrategyState(event_bus=tc.NullEventBus())
+
+    # Core consumes canonical events. Here we use ControlTimeEvent as a simple
+    # canonical trigger event to drive the deterministic step pipeline.
     result_v1 = run_v1_generated_only(state)
     result_v2 = run_v2_with_policy_and_apply(state)
 
-    print("CoreStep quickstart")
+    print("CoreStep quickstart (Core-only deterministic engine)")
     print("v1 generated:", [intent.client_order_id for intent in result_v1.generated_intents])
     print(
         "v1 candidate origins:",
         [record.origin.value for record in result_v1.candidate_intent_records],
     )
-    print("v1 dispatchable:", [intent.client_order_id for intent in result_v1.dispatchable_intents])
+    print("v1 dispatchable: [] (Core does not dispatch externally)")
     print("v2 dispatchable:", [intent.client_order_id for intent in result_v2.dispatchable_intents])
     print("v2 obligation:", result_v2.control_scheduling_obligation)
+    print("Runtime dispatches these later; Core only returns decisions/intents.")
 
 
 if __name__ == "__main__":

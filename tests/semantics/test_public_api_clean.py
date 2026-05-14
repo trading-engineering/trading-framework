@@ -53,6 +53,7 @@ def test_public_api_does_not_expose_removed_compatibility_symbols() -> None:
         "".join(["Core", "DecisionContext"]),
         "".join(["OrderState", "Event"]),
         "".join(["Derived", "FillEvent"]),
+        "".join(["decide_", "intents"]),
         "".join(["Venue", "Adapter"]),
         "".join(["Venue", "Policy"]),
     )
