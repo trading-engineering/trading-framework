@@ -8,8 +8,17 @@ candidate Intents, optional `dispatchable_intents`, and optional
 Control Scheduling Obligation output. It does not perform Venue I/O,
 Execution (adapter-side dispatch), or Runtime orchestration.
 
-> Terminology: Definitions and related terms match the [canonical
-> terminology](https://tradingchassis.github.io/docs/latest/00-guides/terminology/).
+**What it is:** a shared library for the decision path only—canonical Event in,
+deterministic Strategy / Risk Engine / Execution Control processing, Intents and
+Execution Control outputs out. **What it is not:** a one-off Backtesting script, a Venue
+connector, a Live or Kubernetes Runtime, or anything that performs external
+dispatch. The same Core is meant to stay stable while local Research, Backtesting,
+simulation, Live trading, Venue Adapters, and infrastructure around you change.
+
+> Terminology: Definitions and related terms match the
+> [`canonical terminology`](https://tradingchassis.github.io/docs/latest/00-guides/terminology/).
+> In-repo pointers: [`core/docs/README.md`](docs/README.md) and
+> [`core/docs/code-map/core-pipeline-map.md`](docs/code-map/core-pipeline-map.md).
 
 ## Why this exists
 
@@ -20,6 +29,15 @@ evaluation, Risk Engine (policy) admission, and Execution Control
 (planning apply over reconciled Intents)—in one library. Runtime
 environments (Backtesting, Live, Research tooling, Kubernetes-backed
 deployments, different Venue Adapters) may change; Core should not.
+
+A typical notebook or one-off Backtesting script inlines feed handling, Strategy rules,
+Risk Engine (policy) checks, and how orders are sent in one place. That is fast to sketch but
+tends to fork: the Live path reimplements similar ideas with different bugs and
+timing. Core keeps the decision kernel in one place: Runtimes normalize inputs into
+canonical Events, invoke Core, and perform Execution and dispatch outside Core using
+`CoreStepResult`; Strategy, Risk Engine,
+and Execution Control semantics stay identical across those Runtimes when the
+Event Stream and Configuration match.
 
 ## What this gives you
 
@@ -33,30 +51,50 @@ deployments, different Venue Adapters) may change; Core should not.
 | Runtime-independent package | Test trading semantics without production I/O; explicit ownership boundary |
 | Shared kernel across environments | Serious Backtesting and Live parity for the decision engine—no secondary copy of Strategy/Risk Engine/Execution Control code elsewhere |
 
+In short: one pipeline, canonical Events, Intents inside Core, policy vs Execution
+Control split, dispatchable Intents plus optional Control Scheduling Obligation for
+the Runtime, and a boundary that makes parity and testing practical—not a second
+copy of decision logic per environment.
+
 ## Why this matters for trading
 
-The gap between tested behavior and real behavior can dominate outcomes.
-Backtesting is useful when the same Core semantics—given comparable
-Event Stream and Configuration—drive decisions in simulation and
-production. Deterministic Core logic driven by canonical Events makes Strategy,
-Risk Engine, and Execution Control behavior reproducible and unit-testable.
-Wall-clock scheduling, Venue behavior, Venue Adapter mapping, and infrastructure
-stay in the Runtime and Venue Adapter, not in Core.
+The gap between tested behavior and Live trading behavior can dominate outcomes. **Backtesting**
+is only a reliable guide if the **same** Core decision logic—Strategy,
+Risk Engine, Execution Control—can drive Live when the Event Stream and
+Configuration are comparable. Deterministic Core logic driven by canonical Events
+makes that logic reproducible and unit-testable without duplicating it in each
+Runtime.
+
+This package does **not** guarantee profitable trading, perfect Backtesting/Live
+equality, or identical fills. It **does** remove a major class of drift: the
+decision engine itself. Wall-clock scheduling, Venue behavior, Venue Adapter
+mapping, latency, liquidity, market-data quality, and infrastructure failure modes
+stay in the Runtime, Venue Adapter, and Venue—not in Core.
 
 ## How it fits into a full system
 
-Each Runtime normalizes inputs into canonical Events and feeds the Core.
-The Core always returns the same result type (`CoreStepResult`) for a given step;
-each Runtime handles environment-specific Execution, scheduling glue, and Control-Time Event
-injection when a Control Scheduling Obligation is realized.
+Backtesting Runtimes, Live Runtimes, and local Research or simulation harnesses can
+all feed the **same** Core: they normalize feeds, timestamps, and control semantics
+into canonical Events, build `EventStreamEntry` sequences, and call the same
+`run_core_step` / reduction APIs. Core always returns the same contract
+(`CoreStepResult`) for a given step; each Runtime owns environment-specific
+Execution, scheduling glue, and Control-Time Event injection when a Control Scheduling Obligation is realized.
 
 ```mermaid
-flowchart TB
-    R1["Runtime:<br/>canonical Event"] --> Entry["EventStreamEntry:<br/>canonical Event + ProcessingPosition"]
-    Entry --> Core["TradingChassis Core:<br/>CoreStep / CoreWakeupStep"]
-    Core --> Result["CoreStepResult:<br/>dispatchable Intents + Control Scheduling Obligation"]
-    Result --> R2["Runtime:<br/>dispatch / scheduling / I/O"]
+flowchart LR
+    BT["Backtesting Runtime"] --> CE["Canonical Events"]
+    LV["Live Runtime"] --> CE
+    RS["Research / local"] --> CE
+    CE --> CORE["TradingChassis Core<br/>deterministic decision kernel"]
+    CORE --> RES["CoreStepResult<br/>dispatchable Intents + Control Scheduling Obligation"]
+    RES --> RT["Runtime<br/>dispatch / scheduling / I/O"]
 ```
+
+Core never replaces the Runtime: the Runtime is responsible for feeding canonical
+Events and for turning `dispatchable_intents` into Venue traffic (and for everything
+Kubernetes, credentials, and operations-related). What stays stable is the Core
+pipeline and contracts; what varies by design is Runtime choice, Venue Adapter,
+Venue, and deployment.
 
 ## Backtesting and Live parity
 
@@ -78,15 +116,15 @@ Execution Control itself.
 - Building an internal trading system where Backtesting and Live should share decision semantics.
 - Wanting a deterministic Strategy / Risk Engine / Execution Control kernel.
 - Separating trading semantics from Venue Adapters, I/O, and Kubernetes wiring.
-- Testing decisions and Intents without Runtime harnesses.
+- Testing decisions and Intents without full Backtesting or Live machinery.
 - Sharing one decision path across simulation and production.
 
 ## When not to use this package
 
 - You only need a one-off Backtesting notebook experiment.
 - You want a complete Venue connector or turnkey Live implementation.
-- You expect this to ship a full Kubernetes Runtime, deployment manifests, or operations.
-- You expect Core to execute orders, talk to Venues, or replace Venue Adapters / Runtime dispatch.
+- You expect this package to ship a full Kubernetes Runtime, deployment manifests, or production operations.
+- You expect Core to execute orders, talk to Venues, replace Venue Adapters, or perform external dispatch.
 
 ## Full pipeline
 
