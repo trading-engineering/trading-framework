@@ -15,6 +15,8 @@ def test_public_api_exposes_clean_core_symbols() -> None:
         "run_core_wakeup_reduction",
         "run_core_wakeup_decision",
         "run_core_wakeup_step",
+        "CoreWakeupStrategyContext",
+        "CoreWakeupStrategyEvaluator",
         "CoreStepResult",
         "CoreStepDecision",
         "PolicyRiskDecision",

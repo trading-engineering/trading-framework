@@ -1,8 +1,8 @@
 # How To Add a Canonical Event
 
-1. Add or update the Pydantic event model in
+1. Add or update the Pydantic Event model in
    `tradingchassis_core/core/domain/types.py`.
-2. Register the event in `core/domain/event_model.py` canonical category mapping.
+2. Register the Event in `core/domain/event_model.py` canonical category mapping.
 3. Add reducer handling in `core/domain/processing.py` within
    `process_canonical_event`.
 4. Add/update semantics tests under `tests/semantics/`.

@@ -9,7 +9,7 @@ High-level map for the standalone Core package.
   pipeline orchestration
 - `tradingchassis_core/core/risk/`: policy-only Risk Engine evaluator/config
 - `tradingchassis_core/core/execution_control/`: Execution Control primitives
-- `tradingchassis_core/core/events/`: internal event bus/sink utilities
+- `tradingchassis_core/core/events/`: internal Event bus/sink utilities
 
 ## Tests and examples
 

@@ -17,7 +17,7 @@ The public package boundary is the `tradingchassis_core` root import.
 - `run_core_step`
 - `run_core_wakeup_reduction`
 - `run_core_wakeup_decision`
-- `run_core_wakeup_step`
+- `run_core_wakeup_step` (ordered batch: reduce all entries, then evaluate Strategy once)
 
 ## Step inputs/outputs
 
@@ -28,6 +28,8 @@ The public package boundary is the `tradingchassis_core` root import.
 - `CoreStepDecision`
 - `CoreStepResult`
 - `CoreWakeupReductionResult`
+- `CoreWakeupStrategyContext`
+- `CoreWakeupStrategyEvaluator`
 
 ## Supporting deterministic models
 

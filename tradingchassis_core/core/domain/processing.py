@@ -1,7 +1,7 @@
-"""Minimal canonical event processing boundary for core.
+"""Minimal canonical Event processing boundary for core.
 
 This module introduces a narrow, docs-aligned processing boundary for current
-canonical event candidates. For these candidates, ``process_canonical_event``
+canonical Event candidates. For these candidates, ``process_canonical_event``
 is the preferred top-level canonical state-advance entrypoint in core.
 
 This module is intentionally small:
@@ -100,7 +100,7 @@ def process_canonical_event(
     position: ProcessingPosition | None = None,
     configuration: CoreConfiguration | None = None,
 ) -> None:
-    """Process a canonical event candidate via existing state reducers.
+    """Process a canonical Event candidate via existing state reducers.
 
     Preferred usage for the current slice:
     - use this function as the top-level canonical ingestion boundary for
@@ -123,7 +123,7 @@ def process_canonical_event(
     """
     record_type = type(event)
     if not is_canonical_stream_candidate_type(record_type):
-        raise TypeError(f"Unsupported non-canonical event type: {record_type.__name__}")
+        raise TypeError(f"Unsupported non-canonical Event type: {record_type.__name__}")
 
     category = canonical_category_for_type(record_type)
 
@@ -206,7 +206,7 @@ def process_canonical_event(
         return
 
     raise TypeError(
-        "Unsupported canonical event candidate for this processing boundary: "
+        "Unsupported canonical Event candidate for this processing boundary: "
         f"{record_type.__name__}"
     )
 

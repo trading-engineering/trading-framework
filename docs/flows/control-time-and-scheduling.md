@@ -27,7 +27,7 @@ to execution-control deferral.
 
 | Deferral kind | Time-dependent? | `ControlSchedulingObligation` by default? | Expected resolution |
 | --- | --- | --- | --- |
-| Rate limit | Yes | **Yes** (reason such as `rate_limit`) | Runtime may realize the obligation and inject `ControlTimeEvent`; the next `run_core_step` re-runs reduction → strategy → … → execution-control apply. |
+| Rate limit | Yes | **Yes** (reason such as `rate_limit`) | Runtime may realize the obligation and inject `ControlTimeEvent`; the next `run_core_step` re-runs reduction → Strategy → … → execution-control apply. |
 | Inflight | No (feedback-dependent) | **No** | Later canonical **execution / lifecycle** Events (for example `OrderSubmittedEvent`, `OrderExecutionFeedbackEvent`, or `FillEvent`, depending on lifecycle) update `StrategyState` so a subsequent step can reconsider queued work. |
 
 **Not in scope for the current contract:** inflight timeout, wall-clock recovery,

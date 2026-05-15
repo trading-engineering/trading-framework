@@ -1,4 +1,7 @@
-"""Core-only CoreStep quickstart example."""
+"""Core-only CoreStep quickstart example.
+
+For ordered multi-entry wakeup batches see run_core_wakeup_step in the docs.
+"""
 
 from __future__ import annotations
 
@@ -73,7 +76,7 @@ def _control_time_entry(*, index: int, ts_ns_local: int) -> tc.EventStreamEntry:
 
 def run_v1_generated_only(state: tc.StrategyState) -> tc.CoreStepResult:
     # v1 shows the minimum deterministic step: Core reduces one canonical Event
-    # and strategy evaluation emits generated Intents. No policy/apply contexts
+    # and Strategy evaluation emits generated Intents. No policy/apply contexts
     # are provided yet, so Core returns zero dispatchable Intents by design.
     result = tc.run_core_step(
         state,

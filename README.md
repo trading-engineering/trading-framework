@@ -1,7 +1,7 @@
 # TradingChassis Core
 
 `tradingchassis_core` is the stable deterministic trading decision kernel
-for TradingChassis: an event-step engine that applies ordered canonical Events
+for TradingChassis: an Event-step engine that applies ordered canonical Events
 (the Event Stream under Processing Order and Configuration)
 and produces `CoreStepResult` outputs—including Strategy-generated and
 candidate Intents, optional `dispatchable_intents`, and optional
@@ -204,11 +204,26 @@ See `examples/core_step_quickstart.py` for a full runnable walkthrough.
 | Entrypoint | Purpose |
 | --- | --- |
 | `run_core_step` | One-entry deterministic reduce/evaluate/decide/apply step |
-| `run_core_wakeup_reduction` | Multi-entry reduction phase for one wakeup |
+| `run_core_wakeup_reduction` | Multi-entry reduction phase for one wakeup (no per-entry Strategy) |
 | `run_core_wakeup_decision` | Wakeup-level candidate/Risk Engine/Execution Control decision phase |
-| `run_core_wakeup_step` | Convenience wrapper for reduction + decision |
+| `run_core_wakeup_step` | Reduce all entries, evaluate Strategy once, then one decision pass |
 | `process_event_entry` | Reduce one `EventStreamEntry` into `StrategyState` |
 | `process_canonical_event` | Reduce one canonical Event into `StrategyState` |
+
+
+
+## CoreWakeupStep semantics
+
+CoreWakeupStep is not "parallel Event processing".
+It is deterministic batch processing: the Runtime gives Core an ordered sequence of
+canonical entries, and Core reduces them in that order before making one decision.
+
+- `run_core_step` handles one `EventStreamEntry`.
+- `run_core_wakeup_step` handles an ordered batch of `EventStreamEntry` values.
+- Runtime is responsible for normalizing and ordering simultaneous raw inputs.
+- Core reduces all wakeup entries in order, evaluates Strategy once on the final state,
+  then runs Policy Admission and ExecutionControl once.
+- Runtime dispatches after the returned `CoreStepResult`.
 
 ## Ownership Boundary
 

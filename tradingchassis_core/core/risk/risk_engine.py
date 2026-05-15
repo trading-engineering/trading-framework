@@ -100,7 +100,7 @@ class RiskEngine:
         return normalized
 
     def build_constraints(self, current_timestamp_ns_local: int) -> RiskConstraints:
-        """Build RiskConstraints handed to strategy evaluation."""
+        """Build RiskConstraints handed to Strategy evaluation."""
         extra = self._constraints_extra(self.risk_cfg.extra)
         return RiskConstraints(
             ts_ns_local=current_timestamp_ns_local,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Protocol, Sequence
+from typing import TYPE_CHECKING, Protocol, Sequence
 
 from tradingchassis_core.core.domain.configuration import CoreConfiguration
 from tradingchassis_core.core.domain.execution_control_apply import (
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class CoreStepStrategyContext:
-    """Deterministic strategy-evaluation context for one Core step."""
+    """Deterministic Strategy-evaluation context for one Core step."""
 
     state: StrategyState
     event: object
@@ -47,10 +47,27 @@ class CoreStepStrategyContext:
 
 
 class CoreStepStrategyEvaluator(Protocol):
-    """Core-owned strategy evaluation protocol for unified step semantics."""
+    """Core-owned Strategy evaluation protocol for unified step semantics."""
 
     def evaluate(self, context: CoreStepStrategyContext) -> Sequence[OrderIntent]:
-        """Evaluate strategy once for the provided step context."""
+        """Evaluate Strategy once for the provided step context."""
+
+
+@dataclass(frozen=True, slots=True)
+class CoreWakeupStrategyContext:
+    """Deterministic Strategy-evaluation context for one Core wakeup batch."""
+
+    state: StrategyState
+    entries: tuple[EventStreamEntry, ...]
+    configuration: CoreConfiguration | None = None
+    last_position: ProcessingPosition | None = None
+
+
+class CoreWakeupStrategyEvaluator(Protocol):
+    """Core-owned Strategy evaluation protocol for one wakeup batch."""
+
+    def evaluate(self, context: CoreWakeupStrategyContext) -> Sequence[OrderIntent]:
+        """Evaluate Strategy once after all wakeup entries are reduced."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,28 +233,27 @@ def run_core_wakeup_reduction(
     entries: Sequence[EventStreamEntry],
     *,
     configuration: CoreConfiguration | None = None,
-    strategy_evaluator: CoreStepStrategyEvaluator | None = None,
-    strategy_event_filter: Callable[[object], bool] | None = None,
+    wakeup_strategy_evaluator: CoreWakeupStrategyEvaluator | None = None,
 ) -> CoreWakeupReductionResult:
-    """Reduce multiple canonical entries and collect wakeup-level generated intents."""
+    """Reduce multiple canonical entries in order for one runtime wakeup."""
     entries_tuple = tuple(entries)
-    generated_intents: list[OrderIntent] = []
     for entry in entries_tuple:
         process_event_entry(state, entry, configuration=configuration)
-        if strategy_evaluator is None:
-            continue
-        if strategy_event_filter is None or not strategy_event_filter(entry.event):
-            continue
-        strategy_context = CoreStepStrategyContext(
+
+    generated_intents: tuple[OrderIntent, ...] = ()
+    if wakeup_strategy_evaluator is not None:
+        last_position = entries_tuple[-1].position if entries_tuple else None
+        wakeup_context = CoreWakeupStrategyContext(
             state=state,
-            event=entry.event,
-            position=entry.position,
+            entries=entries_tuple,
             configuration=configuration,
+            last_position=last_position,
         )
-        generated_intents.extend(strategy_evaluator.evaluate(strategy_context))
+        generated_intents = tuple(wakeup_strategy_evaluator.evaluate(wakeup_context))
+
     return CoreWakeupReductionResult(
         entries=entries_tuple,
-        generated_intents=tuple(generated_intents),
+        generated_intents=generated_intents,
     )
 
 
@@ -329,8 +345,7 @@ def run_core_wakeup_step(
     entries: Sequence[EventStreamEntry],
     *,
     configuration: CoreConfiguration | None = None,
-    strategy_evaluator: CoreStepStrategyEvaluator | None = None,
-    strategy_event_filter: Callable[[object], bool] | None = None,
+    wakeup_strategy_evaluator: CoreWakeupStrategyEvaluator | None = None,
     queued_instrument: str | None = None,
     policy_admission_context: CorePolicyAdmissionContext | None = None,
     execution_control_apply_context: CoreExecutionControlApplyContext | None = None,
@@ -341,8 +356,7 @@ def run_core_wakeup_step(
         state,
         entries,
         configuration=configuration,
-        strategy_evaluator=strategy_evaluator,
-        strategy_event_filter=strategy_event_filter,
+        wakeup_strategy_evaluator=wakeup_strategy_evaluator,
     )
     return run_core_wakeup_decision(
         state,

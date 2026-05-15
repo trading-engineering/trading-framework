@@ -27,4 +27,4 @@ What should happen?
 
 ## Logs / Output
 
-Paste relevant logs, stack traces, or event output here.
+Paste relevant logs, traces, or outputs here.

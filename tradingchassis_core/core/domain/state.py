@@ -1,4 +1,4 @@
-"""Deterministic Core strategy state.
+"""Deterministic Core Strategy state.
 
 This state container keeps canonical reducer-owned data and execution-control
 supporting structures (queue + inflight tracking). Runtime snapshot parsing and
@@ -105,7 +105,7 @@ class CanonicalOrderProjection:
 
 
 class StrategyState:
-    """High-level deterministic strategy state keyed by instrument."""
+    """High-level deterministic Strategy state keyed by instrument."""
 
     def __init__(self, event_bus: EventBus) -> None:
         self._event_bus = event_bus
@@ -213,7 +213,7 @@ class StrategyState:
         self._clear_inflight(event.instrument, event.client_order_id)
 
     def apply_control_time_event(self, event: ControlTimeEvent) -> None:
-        """Reduce canonical control-time event without side effects."""
+        """Reduce canonical control-time Event without side effects."""
         self.update_timestamp(event.ts_ns_local_control)
 
     def _clear_inflight(self, instrument: str, client_order_id: str) -> None:

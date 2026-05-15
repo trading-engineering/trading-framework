@@ -22,3 +22,14 @@ Guardrails:
 - No Runtime dispatch logic in Core pipeline code.
 - No legacy compatibility contract restoration.
 - Keep deterministic behavior and public API coherence.
+
+
+## CoreWakeupStep changes
+
+When updating wakeup behavior:
+
+1. Keep `run_core_wakeup_reduction` as reduction-only (no per-entry Strategy calls).
+2. Use `CoreWakeupStrategyEvaluator` and `wakeup_strategy_evaluator=` for batch evaluation.
+3. Preserve one Policy Admission and one ExecutionControl apply per wakeup in
+   `run_core_wakeup_decision`.
+4. Add tests in `tests/semantics/test_core_wakeup_final_state.py`.

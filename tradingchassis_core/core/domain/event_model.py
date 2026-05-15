@@ -1,4 +1,4 @@
-"""Canonical event taxonomy markers for core."""
+"""Canonical Event taxonomy markers for core."""
 
 from __future__ import annotations
 

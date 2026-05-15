@@ -79,25 +79,6 @@ class _DuplicateIntentEvaluator:
         return [first, second]
 
 
-class _IndexedIntentEvaluator:
-    def evaluate(self, context: tc.CoreStepStrategyContext) -> list[tc.NewOrderIntent]:
-        idx = context.position.index
-        return [
-            tc.NewOrderIntent(
-                intent_type="new",
-                ts_ns_local=100 + idx,
-                instrument="BTC-USDC-PERP",
-                client_order_id=f"wake-{idx}",
-                intents_correlation_id=f"wake-corr-{idx}",
-                side="buy",
-                order_type="limit",
-                intended_qty=tc.Quantity(value=1.0, unit="contracts"),
-                intended_price=tc.Price(currency="USDC", value=100.0 + idx),
-                time_in_force="GTC",
-            )
-        ]
-
-
 def _control_entry(index: int, ts: int) -> tc.EventStreamEntry:
     return tc.EventStreamEntry(
         position=tc.ProcessingPosition(index=index),
@@ -161,8 +142,7 @@ def test_run_core_wakeup_step_clean_pipeline_dispatchable() -> None:
     result = tc.run_core_wakeup_step(
         state,
         (_control_entry(0, 100), _control_entry(1, 101)),
-        strategy_evaluator=_OneIntentEvaluator(),
-        strategy_event_filter=lambda _event: True,
+        wakeup_strategy_evaluator=_OneIntentEvaluator(),
         policy_admission_context=tc.CorePolicyAdmissionContext(
             policy_evaluator=_AllowAllPolicy(),
             now_ts_ns_local=101,
@@ -173,64 +153,9 @@ def test_run_core_wakeup_step_clean_pipeline_dispatchable() -> None:
             activate_dispatchable_outputs=True,
         ),
     )
-    assert len(result.generated_intents) == 2
+    assert len(result.generated_intents) == 1
     assert len(result.candidate_intent_records) == 1
     assert len(result.dispatchable_intents) == 1
-
-
-def test_run_core_wakeup_step_matches_reduction_then_decision_path() -> None:
-    entries = (_control_entry(0, 100), _control_entry(1, 101))
-    reduction_state = tc.StrategyState(event_bus=tc.NullEventBus())
-    reduction = tc.run_core_wakeup_reduction(
-        reduction_state,
-        entries,
-        strategy_evaluator=_IndexedIntentEvaluator(),
-        strategy_event_filter=lambda _event: True,
-    )
-    decision_result = tc.run_core_wakeup_decision(
-        reduction_state,
-        reduction,
-        policy_admission_context=tc.CorePolicyAdmissionContext(
-            policy_evaluator=_AllowAllPolicy(),
-            now_ts_ns_local=101,
-        ),
-        execution_control_apply_context=tc.CoreExecutionControlApplyContext(
-            execution_control=tc.ExecutionControl(),
-            now_ts_ns_local=101,
-            activate_dispatchable_outputs=True,
-        ),
-    )
-
-    step_state = tc.StrategyState(event_bus=tc.NullEventBus())
-    step_result = tc.run_core_wakeup_step(
-        step_state,
-        entries,
-        strategy_evaluator=_IndexedIntentEvaluator(),
-        strategy_event_filter=lambda _event: True,
-        policy_admission_context=tc.CorePolicyAdmissionContext(
-            policy_evaluator=_AllowAllPolicy(),
-            now_ts_ns_local=101,
-        ),
-        execution_control_apply_context=tc.CoreExecutionControlApplyContext(
-            execution_control=tc.ExecutionControl(),
-            now_ts_ns_local=101,
-            activate_dispatchable_outputs=True,
-        ),
-    )
-
-    assert tuple(intent.client_order_id for intent in decision_result.generated_intents) == (
-        "wake-0",
-        "wake-1",
-    )
-    assert tuple(intent.client_order_id for intent in step_result.generated_intents) == (
-        "wake-0",
-        "wake-1",
-    )
-    assert tuple(intent.client_order_id for intent in step_result.dispatchable_intents) == (
-        "wake-0",
-        "wake-1",
-    )
-    assert decision_result == step_result
 
 
 def test_candidate_reconciliation_prefers_latest_same_key_generated_intent() -> None:
