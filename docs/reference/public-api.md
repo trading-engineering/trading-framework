@@ -6,12 +6,12 @@ The public package boundary is the `tradingchassis_core` root import.
 
 ### Internally wired (when step APIs run)
 
-These run inside Core when you call `run_core_step` / wakeup APIs (no substitute
+These run inside Core when you call `run_core_step` / CoreWakeupStep APIs (no substitute
 implementation required):
 
 - `process_event_entry` / `process_canonical_event` and canonical reducers
 - Candidate combination, dominance, and reconciliation
-- Policy admission **mechanism** when `CorePolicyAdmissionContext` is provided
+- Policy Admission **mechanism** when `CorePolicyAdmissionContext` is provided
 - Execution Control plan/apply **mechanism** when policy + apply contexts are provided
 - `CoreStepResult` / `CoreStepDecision` production
 
@@ -20,7 +20,7 @@ implementation required):
 | Symbol | Role |
 | --- | --- |
 | `CoreStepStrategyEvaluator` / `CoreWakeupStrategyEvaluator` | Strategy evaluation |
-| `PolicyIntentEvaluator` | Policy admission (`evaluate_policy_intent`) via `CorePolicyAdmissionContext` |
+| `PolicyIntentEvaluator` | Policy Admission (`evaluate_policy_intent`) via `CorePolicyAdmissionContext` |
 | `ExecutionControl` | Queue/rate/inflight apply via `CoreExecutionControlApplyContext` |
 | `CoreConfiguration` | Optional instrument metadata for positioned market reduction |
 | `EventBus` / `NullEventBus` | `StrategyState` requires a bus; use `NullEventBus` for standalone Core |
@@ -76,7 +76,7 @@ Examples:
 - `PolicyRiskDecision`
 - `PolicyAdmissionResult`
 - `PolicyRejectedCandidate`
-- `RiskEngine` (convenience `PolicyIntentEvaluator`)
+- Risk Engine (`RiskEngine`) (convenience `PolicyIntentEvaluator`)
 - `RiskConfig`
 - `RiskConstraints` (data model; often built for Strategy via `RiskEngine.build_constraints`)
 
@@ -104,7 +104,6 @@ Examples:
 ## Runtime-safe utilities
 
 - `NullEventBus`
-- `fold_event_stream_entries` (batch reduction helper)
 
 ## Publicly absent by design
 
@@ -115,4 +114,7 @@ Examples:
 - `OrderStateEvent`
 - `DerivedFillEvent`
 - `VenueAdapter` / `VenuePolicy`
-- `RiskPolicy` / `ExecutionConstraintsPolicy` (internal to `RiskEngine`)
+- `RiskPolicy` / `ExecutionConstraintsPolicy` (internal to Risk Engine / `RiskEngine`)
+- `fold_event_stream_entries` (removed U3; loop `process_event_entry` instead)
+- `apply_execution_control_plan` and apply detail record types (internal; use `CoreStepResult`)
+- Telemetry event types formerly in `core/events/events.py` (removed U3)

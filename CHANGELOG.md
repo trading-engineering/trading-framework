@@ -4,12 +4,20 @@ This changelog starts from the clean Core package baseline.
 
 ## [Unreleased]
 
+### Removed
+
+- `StrategyState.pop_queued_intents` (unused; Execution Control uses per-order queue helpers).
+- `fold_event_stream_entries` and root export (use `process_event_entry` in order).
+- Unused telemetry models in `core/events/events.py`.
+- Unused `combine_candidate_intents` helper.
+- Root exports for Execution Control apply detail types and `apply_execution_control_plan` (internal Execution Control apply stage).
+
 ### Added
 
 - Deterministic `run_core_step` and `run_core_wakeup_step` architecture.
 - CoreWakeupStep final Strategy evaluation: reduce all entries, then `CoreWakeupStrategyEvaluator` once.
 - Canonical Event input models and `EventStreamEntry`/`ProcessingPosition`.
-- Intent candidate record Pipeline with dominance/reconciliation.
+- Intent Pipeline candidate records with dominance/reconciliation.
 - Risk Engine (policy-only) admission and Execution Control plan/apply integration.
 - `CoreStepResult.dispatchable_intents` and `ControlSchedulingObligation` outputs.
 - Core-only quickstart example and focused semantics test coverage.
