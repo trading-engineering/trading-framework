@@ -19,6 +19,7 @@ def test_public_api_exposes_clean_core_symbols() -> None:
         "CoreWakeupStrategyEvaluator",
         "CoreStepResult",
         "CoreStepDecision",
+        "PolicyIntentEvaluator",
         "PolicyRiskDecision",
         "ExecutionControlDecision",
         "CandidateIntentRecord",

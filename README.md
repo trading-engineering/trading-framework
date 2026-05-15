@@ -1,6 +1,6 @@
 # TradingChassis Core
 
-`tradingchassis_core` is the stable deterministic trading decision kernel
+`tradingchassis_core` is the stable deterministic trading decision engine
 for TradingChassis: an Event-step engine that applies ordered canonical Events
 (the Event Stream under Processing Order and Configuration)
 and produces `CoreStepResult` outputs—including Strategy-generated and
@@ -24,6 +24,40 @@ simulation, Live trading, Venue Adapters, and infrastructure around you change.
 
 <img src="https://img.spacergif.org/spacer.gif" width="1" height="32"/>
 
+## Internally wired vs externally supplied
+
+The clean Core Pipeline is always the same shape; some pieces run inside Core
+when you call step APIs, and others must be supplied by your Runtime or tests.
+
+### Internally wired (always part of Core when you call step APIs)
+
+- `process_event_entry` / `process_canonical_event` and canonical reducers
+- Candidate combination, dominance, and reconciliation (`combine_candidate_intent_records`)
+- Policy admission **mechanism** when `CorePolicyAdmissionContext` is provided
+- Execution Control plan/apply **mechanism** when policy + apply contexts are provided
+- `CoreStepResult` / `CoreStepDecision` production
+
+### Externally supplied extension points
+
+- **Strategy evaluator** — `CoreStepStrategyEvaluator` or `CoreWakeupStrategyEvaluator`
+- **Policy evaluator** — any object implementing `PolicyIntentEvaluator` (passed via `CorePolicyAdmissionContext`)
+- **Execution Control** — `ExecutionControl` instance (passed via `CoreExecutionControlApplyContext`)
+- **Configuration** — optional `CoreConfiguration` for positioned market reduction
+- **Event bus** — `StrategyState` requires an `EventBus`; use `NullEventBus` for standalone Core/tests
+
+### Convenience implementations (optional; not wired by default)
+
+- **`RiskEngine`** — provided `PolicyIntentEvaluator` with built-in policy gates
+- **`ExecutionControl`** — provided queue/rate/inflight implementation
+- **`NullEventBus`** — discards observability events for tests and examples
+
+The minimal quickstart uses an inline allow-all policy to stay small. That does
+**not** mean `RiskEngine` is unused or dead. Use `RiskEngine` when you want the
+built-in policy behavior. See `examples/core_step_quickstart.py` (minimal) and
+`tests/runnable/core_step_with_risk_engine.py` (RiskEngine variant).
+
+<img src="https://img.spacergif.org/spacer.gif" width="1" height="32"/>
+
 ## Why it is relevant
 
 Trading systems often drift when Backtesting logic, Live logic, policy limits, and
@@ -37,7 +71,7 @@ deployments, different Venue Adapters) may change; Core should not.
 A typical notebook or one-off Backtesting script inlines feed handling, Strategy rules,
 Risk Engine (policy) checks, and how orders are sent in one place. That is fast to sketch but
 tends to fork: the Live path reimplements similar ideas with different bugs and
-timing. Core keeps the decision kernel in one place: Runtimes normalize inputs into
+timing. Core keeps the decision engine in one place: Runtimes normalize inputs into
 canonical Events, invoke Core, and perform Execution and dispatch outside Core using
 `CoreStepResult`; Strategy, Risk Engine,
 and Execution Control semantics stay identical across those Runtimes when the
@@ -111,7 +145,7 @@ Venue, and deployment.
 ## When to use `tradingchassis_core`
 
 - Building an internal trading system where Backtesting and Live should share decision semantics.
-- Wanting a deterministic Strategy / Risk Engine / Execution Control kernel.
+- Wanting a deterministic Strategy / Risk Engine / Execution Control engine.
 - Separating trading semantics from Venue Adapters, I/O, and Kubernetes wiring.
 - Testing decisions and Intents without full Backtesting or Live machinery.
 - Sharing one decision path across simulation and production.
@@ -131,6 +165,12 @@ Run the quickstart
 
 ```bash
 python examples/core_step_quickstart.py
+```
+
+Optional RiskEngine policy example (same Pipeline, built-in policy):
+
+```bash
+python tests/runnable/core_step_with_risk_engine.py
 ```
 
 or minimal shape:
@@ -231,6 +271,8 @@ copy of decision logic per environment.
 | `run_core_wakeup_step` | Reduce all entries, evaluate Strategy once, then one decision pass |
 | `process_event_entry` | Reduce one `EventStreamEntry` into `StrategyState` |
 | `process_canonical_event` | Reduce one canonical Event into `StrategyState` |
+| `PolicyIntentEvaluator` | Protocol for policy admission (`evaluate_policy_intent`) |
+| `RiskEngine` | Convenience `PolicyIntentEvaluator` implementation |
 
 ## CoreWakeupStep semantics
 
@@ -254,6 +296,7 @@ From root:
 ```bash
 python -m pip install -e ".[dev]"
 python examples/core_step_quickstart.py
+python tests/runnable/core_step_with_risk_engine.py
 ./scripts/check.sh
 python -m build
 ```

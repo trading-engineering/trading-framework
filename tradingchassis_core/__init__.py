@@ -22,6 +22,7 @@ from tradingchassis_core.core.domain.execution_control_decision import (
 )
 from tradingchassis_core.core.domain.policy_risk_decision import (
     PolicyAdmissionResult,
+    PolicyIntentEvaluator,
     PolicyRejectedCandidate,
     PolicyRiskDecision,
 )
@@ -120,6 +121,7 @@ __all__ = [
     "ExecutionControlDispatchableRecord",
     "ExecutionControlHandledRecord",
     "apply_execution_control_plan",
+    "PolicyIntentEvaluator",
     "PolicyRiskDecision",
     "PolicyRejectedCandidate",
     "PolicyAdmissionResult",
