@@ -37,6 +37,9 @@ This changelog starts from the clean Core package baseline.
 - Package metadata, exports, and docs reset for standalone Core library identity.
 - Pydantic models established as contract source of truth across public API docs.
 - README clarifies internally wired pipeline vs externally supplied extension points.
+- Runtime/Core contract wording hardened with a normative Runtime-obligation
+  matrix, explicit `CoreStepResult` output semantics, and clearer
+  `ControlSchedulingObligation` vs `ControlTimeEvent` boundary language.
 - Canonical `MarketEvent` contract wording now explicitly documents the current
   book-only reduction baseline; trade-shaped payloads are explicitly unsupported
   for canonical reduction in this slice.

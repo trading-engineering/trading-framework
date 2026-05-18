@@ -17,6 +17,40 @@ contracts. Pydantic models are the schema source of truth.
 - `OrderExecutionFeedbackEvent`: canonical account feedback (account/position/balance projection)
 - `FillEvent`: canonical fill lifecycle update
 
+## Runtime obligation matrix (Core perspective)
+
+Core is deterministic reduction and decision logic. Runtime owns Venue I/O,
+adapter dispatch, and canonical Event injection into the Event Stream.
+
+Core never performs external dispatch. Runtime dispatches
+`CoreStepResult.dispatchable_intents` later and injects canonical feedback Events.
+
+| Runtime / external outcome | Canonical Event to inject into Core | Core reducer effect | Notes / non-goals |
+| --- | --- | --- | --- |
+| Book market data input | `MarketEvent` | Updates Market State projection and monotone local time | Current Core baseline is book-only; trade-shaped `MarketEvent` is rejected for canonical reduction. |
+| Rate-limit recheck obligation becomes due | `ControlTimeEvent` | Canonical control-time reduction updates monotone local time | `ControlSchedulingObligation` is non-canonical output and does not enter the Event Stream directly. |
+| Successful external NEW dispatch | `OrderSubmittedEvent` | Creates/updates active Order projection and clears inflight for `instrument + client_order_id` | Submission acknowledgement boundary for NEW dispatch outcomes. |
+| Authoritative fill feedback | `FillEvent` | Updates fill history, cumulative fill quantity, and Order fill progression | Runtime fill ingress is environment-specific and can be deferred by Runtime capability tracks. |
+| Account/execution snapshot feedback | `OrderExecutionFeedbackEvent` | Updates account projection only | Not a replacement for `FillEvent`; does not encode terminal Order Lifecycle status. |
+| Cancel confirmation / terminal cancel outcome | `OrderCanceledEvent` | Removes active working Order, sets terminal canonical projection (`canceled`), clears inflight | Terminal Order Lifecycle feedback path. |
+| Venue/order rejection after dispatch | `OrderRejectedEvent` | Removes active working Order, sets terminal canonical projection (`rejected`), clears inflight | Distinct from Policy Admission rejection (pre-dispatch). |
+| Order expiry | `OrderExpiredEvent` | Removes active working Order, sets terminal canonical projection (`expired`), clears inflight | Terminal lifecycle closure from runtime feedback. |
+
+Explicit contract notes:
+
+- `CoreStepResult.generated_intents`, `candidate_intents`,
+  `candidate_intent_records`, and `core_step_decision` are introspection /
+  diagnostic outputs, not external dispatch obligations.
+- Dispatch failure before submission is not automatically `OrderRejectedEvent`.
+  `OrderRejectedEvent` is a terminal Order Lifecycle feedback Event after
+  dispatch.
+- Policy Admission rejection is not `OrderRejectedEvent`; Policy Admission
+  occurs before dispatch in the Order Intent pipeline.
+- `mark_intent_sent` is not part of the public Runtime/Core contract boundary.
+- Runtime loop progress/no-spin behavior, pending scheduling lifecycle,
+  hftbacktest behavior, and recorder behavior are runtime-repository concerns,
+  not Core contract behavior.
+
 Terminal lifecycle reducer contract in this Core baseline:
 
 - `OrderCanceledEvent`, `OrderRejectedEvent`, and `OrderExpiredEvent` update

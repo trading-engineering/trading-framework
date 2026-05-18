@@ -89,6 +89,16 @@ Current Core baseline note:
 - `CoreWakeupStrategyEvaluator`
 - `StrategyStateView` (read-only Strategy boundary)
 
+`CoreStepResult` Runtime boundary semantics:
+
+- `dispatchable_intents` is the Runtime-facing dispatch envelope. Runtime may
+  dispatch these Intents later; Core does not dispatch externally.
+- `control_scheduling_obligation` is a non-canonical Runtime-facing signal for
+  time-dependent rate-limit deferral in the current slice.
+- `generated_intents`, `candidate_intents`, `candidate_intent_records`, and
+  `core_step_decision` are deterministic introspection outputs and are not
+  themselves external dispatch obligations.
+
 ## Policy and risk
 
 - `PolicyIntentEvaluator` (protocol)

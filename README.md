@@ -189,6 +189,11 @@ Runtime reduces to canonical Events
 Runtime dispatches Intents into Orders
 ```
 
+Runtime/Core contract matrix (Core perspective): see
+[`docs/reference/events-reference.md`](docs/reference/events-reference.md)
+for the normative Runtime/external outcome -> canonical Event injection table and
+reducer effects.
+
 Terminal Order lifecycle baseline in this Core slice:
 
 - Core now accepts explicit canonical terminal lifecycle Events:
@@ -200,6 +205,9 @@ Terminal Order lifecycle baseline in this Core slice:
   `instrument + client_order_id`.
 - `OrderRejectedEvent` is an Order lifecycle execution outcome and is distinct
   from Policy Admission rejection in the Intent pipeline.
+- Dispatch failure before submission is not automatically `OrderRejectedEvent`.
+- `OrderExecutionFeedbackEvent` is account-level feedback and does not replace
+  `FillEvent` or terminal lifecycle Events.
 - This slice does not add `OrderAcceptedEvent` and does not introduce a full
   order state machine framework.
 
