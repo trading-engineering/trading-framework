@@ -75,7 +75,7 @@ def _prime_market(state: tc.StrategyState) -> None:
 
 
 def test_risk_engine_accepts_generated_intent_in_run_core_step() -> None:
-    """RiskEngine is a valid optional policy_evaluator for the full step Pipeline."""
+    """RiskEngine is a valid optional policy_evaluator for the full step pipeline."""
     state = tc.StrategyState(event_bus=tc.NullEventBus())
     _prime_market(state)
     policy_engine = tc.RiskEngine(_risk_config(trading_enabled=True))
@@ -109,7 +109,7 @@ def test_risk_engine_accepts_generated_intent_in_run_core_step() -> None:
 
 
 def test_risk_engine_rejects_generated_intent_when_trading_disabled() -> None:
-    """Trading-disabled RiskConfig rejects new intents through policy admission."""
+    """Trading-disabled RiskConfig rejects new Intents through policy admission."""
     state = tc.StrategyState(event_bus=tc.NullEventBus())
     _prime_market(state)
     policy_engine = tc.RiskEngine(_risk_config(trading_enabled=False))

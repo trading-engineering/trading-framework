@@ -43,7 +43,7 @@ from tradingchassis_core.core.domain.slots import (
     SlotKey,
     stable_slot_order_id,
 )
-from tradingchassis_core.core.domain.state import StrategyState
+from tradingchassis_core.core.domain.state import StrategyState, StrategyStateView
 from tradingchassis_core.core.domain.step_decision import CoreStepDecision
 from tradingchassis_core.core.domain.step_result import CoreStepResult
 from tradingchassis_core.core.domain.types import (
@@ -53,8 +53,11 @@ from tradingchassis_core.core.domain.types import (
     MarketEvent,
     NewOrderIntent,
     NotionalLimits,
+    OrderCanceledEvent,
     OrderExecutionFeedbackEvent,
+    OrderExpiredEvent,
     OrderIntent,
+    OrderRejectedEvent,
     OrderSubmittedEvent,
     Price,
     Quantity,
@@ -72,9 +75,13 @@ __all__ = [
     "RiskConfig",
     "RiskEngine",
     "StrategyState",
+    "StrategyStateView",
     "MarketEvent",
     "ControlTimeEvent",
     "OrderSubmittedEvent",
+    "OrderCanceledEvent",
+    "OrderRejectedEvent",
+    "OrderExpiredEvent",
     "OrderExecutionFeedbackEvent",
     "FillEvent",
     "RiskConstraints",

@@ -11,12 +11,13 @@ to Execution Control deferral.
   canonical Event Stream and does not mutate `StrategyState`.
 - **Control-Time Event** (`ControlTimeEvent`) — Canonical **control** category Event. It becomes part of the
   deterministic history only after the **Runtime** injects it as
-  `EventStreamEntry` input (same ingestion path as other canonical Events).
+  `EventStreamEntry` input (same ingestion path as other canonical Events). It is
+  sparse/deadline-style control feedback, not a periodic tick requirement.
 - **Inflight** — Core-side **Intent-operation** gating: a sendability / operation
   slot (for example keyed by `client_order_id`) is occupied because an earlier
   Intent operation is still awaiting **canonical execution feedback**. This is
   not the same as venue-side “order ownership”; Core models sendability for the
-  decision Pipeline.
+  decision pipeline.
 - **Rate-limit deferral** — Execution Control blocks dispatch because the
   configured **token / time budget** for orders or cancels is not yet available at
   the apply clock (`now_ts_ns_local` in `CoreExecutionControlApplyContext`).
@@ -37,12 +38,17 @@ or “synthetic” obligations for inflight-only waits.
 `ControlTimeEvent`. Obligations are for **rate-limit** rechecks in the current
 Core slice.
 
-## Clean Core Pipeline (unchanged)
+`ControlSchedulingObligation` is produced in Execution Control **apply** for
+time-dependent rate-limit deferral. It does not mutate Strategy State and does
+not enter the Event Stream directly. Runtime may realize it later by injecting
+a canonical `ControlTimeEvent`.
+
+## Clean Core pipeline (unchanged)
 
 1. `EventStreamEntry`
 2. `process_event_entry` / `process_canonical_event`
 3. Strategy evaluator
-4. generated intents
+4. generated Intents
 5. candidate records + dominance / reconciliation
 6. policy admission
 7. Execution Control plan / apply

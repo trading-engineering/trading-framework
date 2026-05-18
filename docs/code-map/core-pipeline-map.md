@@ -1,6 +1,6 @@
-# Core Pipeline Map
+# Core pipeline Map
 
-This map captures the only supported deterministic decision Pipeline for
+This map captures the only supported deterministic decision pipeline for
 TradingChassis Core.
 
 ## Step-by-step flow
@@ -17,7 +17,7 @@ TradingChassis Core.
    in the current slice—see `../flows/control-time-and-scheduling.md`).
 9. Runtime can dispatch later and inject further canonical Events (including
    `ControlTimeEvent` when an obligation is realized); Core does not perform
-   external dispatch or mutate Queues outside this Pipeline.
+   external dispatch or mutate Queues outside this pipeline.
 
 ## Core APIs
 
@@ -46,7 +46,7 @@ Wakeup flow:
 2. `run_core_wakeup_reduction` calls `process_event_entry` for each entry in order.
 3. `CoreWakeupStrategyEvaluator.evaluate` runs **once** on the fully reduced State
    (`CoreWakeupStrategyContext` carries all entries).
-4. `run_core_wakeup_decision` snapshots queued intents once, combines generated + queued
+4. `run_core_wakeup_decision` snapshots queued Intents once, combines generated + queued
    once, applies dominance/reconciliation once, Policy Admission once, and
    Execution Control plan/apply once.
 5. `CoreStepResult.dispatchable_intents` is returned; Runtime dispatches later.

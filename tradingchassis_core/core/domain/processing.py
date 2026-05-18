@@ -29,7 +29,10 @@ from tradingchassis_core.core.domain.types import (
     ControlTimeEvent,
     FillEvent,
     MarketEvent,
+    OrderCanceledEvent,
     OrderExecutionFeedbackEvent,
+    OrderExpiredEvent,
+    OrderRejectedEvent,
     OrderSubmittedEvent,
 )
 
@@ -110,6 +113,9 @@ def process_canonical_event(
     Accepted canonical candidates in the current slice:
     - ``MarketEvent`` (category: ``market``)
     - ``OrderSubmittedEvent`` (category: ``intent_related``)
+    - ``OrderCanceledEvent`` (category: ``execution``)
+    - ``OrderRejectedEvent`` (category: ``execution``)
+    - ``OrderExpiredEvent`` (category: ``execution``)
     - ``FillEvent`` (category: ``execution``)
     - ``OrderExecutionFeedbackEvent`` (category: ``execution``)
     - ``ControlTimeEvent`` (category: ``control``)
@@ -128,15 +134,22 @@ def process_canonical_event(
     category = canonical_category_for_type(record_type)
 
     if category == CanonicalEventCategory.MARKET and isinstance(event, MarketEvent):
-        if not event.is_book() or event.book is None:
+        if event.is_trade():
             raise ValueError(
-                "Unsupported MarketEvent payload for canonical processing: "
-                "book snapshot/delta with top-of-book levels is required."
+                "Unsupported MarketEvent for canonical processing in the current Core "
+                "baseline: only book MarketEvent payloads are reduced; trade-shaped "
+                "MarketEvent payloads are not supported."
+            )
+        if event.book is None:
+            raise ValueError(
+                "Unsupported MarketEvent payload for canonical processing in the current "
+                "Core baseline: book payload is required."
             )
         if not event.book.bids or not event.book.asks:
             raise ValueError(
-                "Unsupported MarketEvent payload for canonical processing: "
-                "book payload must include at least one bid and one ask level."
+                "Unsupported MarketEvent payload for canonical processing in the current "
+                "Core baseline: book payload must include at least one bid and one ask "
+                "level."
             )
 
         best_bid_level = event.book.bids[0]
@@ -179,6 +192,24 @@ def process_canonical_event(
         if position is not None:
             state._advance_processing_position(position)
         state.apply_fill_event(event)
+        return
+
+    if category == CanonicalEventCategory.EXECUTION and isinstance(event, OrderCanceledEvent):
+        if position is not None:
+            state._advance_processing_position(position)
+        state.apply_order_canceled_event(event)
+        return
+
+    if category == CanonicalEventCategory.EXECUTION and isinstance(event, OrderRejectedEvent):
+        if position is not None:
+            state._advance_processing_position(position)
+        state.apply_order_rejected_event(event)
+        return
+
+    if category == CanonicalEventCategory.EXECUTION and isinstance(event, OrderExpiredEvent):
+        if position is not None:
+            state._advance_processing_position(position)
+        state.apply_order_expired_event(event)
         return
 
     if (
